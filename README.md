@@ -5,6 +5,11 @@ challenge funding, signed race telemetry, settlement, and zero-fee refunds.
 The included REST surface is a **trusted telemetry-provider webhook**, not a
 browser endpoint for spending another participant's balance.
 
+Production service: https://racing-escrow-engine.vercel.app/
+Source: https://github.com/dimonsdavid-stack/racing-escrow-engine-
+The service is deployed; settlement remains disabled until server credentials,
+the racing ledger, provider identities and the refund scheduler are provisioned.
+
 ## Source map
 
 | File | Purpose |
@@ -349,7 +354,9 @@ containers. It runs deterministic tests, the native suite, and the production
 dependency audit, and preserves JUnit reports. Actions are pinned to verified
 commit SHAs and checkout does not persist credentials. Configure the resulting
 checks as required in repository branch protection before allowing releases.
-The workflow is provided as source; it has not run against a connected repository.
+The workflow passed on PostgreSQL 15 and 17 for the initial deployment commit
+`416f65209e1245bb13fb0c5dad633a837f556075` on 2026-10-05, including native
+independent-session concurrency tests and the production dependency audit.
 
 For a disposable local native run on a Docker-enabled machine:
 
@@ -377,11 +384,10 @@ not financial readiness or database durability. The image build accepts a
 digest. Production storage remains in the configured Supabase/PostgreSQL
 ledger; the disposable test compose file is not its deployment topology.
 
-This deliverable implements the requested ledger and validation core. It is
-not a deployed service, a mobile UI, a cash custody account, a redemption
-processor or a participant-consent onboarding system. Connect those product
-boundaries before opening the service to end users; the ledger's token labels
-alone do not create those external capabilities.
+The deployed runtime provides the requested ledger integration and telemetry
+API plus a mobile-friendly service status page. Cash custody, redemption,
+participant onboarding and consent collection require separate integrations.
+The status page does not enable race entry or spending.
 
 ## Primary implementation references
 

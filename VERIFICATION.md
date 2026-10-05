@@ -1,4 +1,19 @@
-# Verification record — 1.1.0 — 2026-10-04
+# Verification record — 1.1.0 — 2026-10-05
+
+Production URL: https://racing-escrow-engine.vercel.app/
+Repository: https://github.com/dimonsdavid-stack/racing-escrow-engine-
+Initial engine commit: `416f65209e1245bb13fb0c5dad633a837f556075`.
+Vercel project: `prj_VcK7s2BN3AY78hp6frEg8JUInaeq`, team 720studios.
+Initial production deployment: `dpl_ESAr14mzzEK2LMBLbrUpv6XpzLLr`.
+Deployment state: READY; Express; Node.js 24.x.
+
+GitHub Actions run:
+https://github.com/dimonsdavid-stack/racing-escrow-engine-/actions/runs/37382261106
+
+Both PostgreSQL 15 and PostgreSQL 17 jobs completed successfully, including
+locked dependency installation, deterministic HTTP/SQL tests, native
+independent-session concurrency tests, production dependency audit and test
+report upload. The registry audit reported zero production vulnerabilities.
 
 Executed in the supplied workspace with Node 24.19.0:
 
@@ -33,10 +48,11 @@ available while settlement returns 503 without any RPC; configured unsigned
 requests still return 401. The Vercel default export imports without secrets,
 serves the mobile status page and its module/CSS assets, and does not expose
 environment or SQL files. The status API explicitly leaves database connectivity
-unchecked. No external GitHub push or Vercel deployment has completed.
+unchecked. The full engine source has been pushed and deployed to production.
 
-**Native concurrent-session tests are included but were not executed here.**
-No native PostgreSQL server or disposable remote test database was available.
+**Native concurrent-session tests passed on PostgreSQL 15 and 17 in CI.**
+No native PostgreSQL server was available in the local workspace; GitHub's
+disposable service containers executed the suite successfully.
 PGlite serializes its single database session and is not a substitute for
 independent-connection lock-contention tests. The expanded suite includes 11
 native scenarios, including observed lock waits, committed/rolled-back first
@@ -45,13 +61,31 @@ and simultaneous GC/SC funding. Run `npm run test:concurrency`
 against a fresh disposable PostgreSQL/Supabase-compatible database using the
 environment variables described in README.md before production release.
 
-The GitHub Actions workflow and nonroot Docker/Compose configuration are
-included as runnable source. No connected repository workflow was executed,
-and no Docker image was built in this Docker-free workspace. The native suite
+The GitHub Actions workflow executed successfully against the connected
+repository. No production Docker image was built in this Docker-free workspace. The native suite
 is mandatory in `test:all`; it does not silently skip when a database is absent.
 
-No Supabase project was modified and no service was deployed. Provider signing
+No production Supabase project was modified and no live wallet was funded or
+settled. The hosted service is deployed with settlement deliberately disabled.
+Provider signing
 keys, user provisioning, consent checks, TLS/gateway configuration, timeout
 scheduling, database durability/restore verification and external cash custody
 remain deployment/integration responsibilities. The supplied code implements
 the ledger and telemetry core; it does not assert those external systems exist.
+
+Direct unauthenticated curl requests, without cookies or bypass credentials,
+verified the public production domain:
+
+| Route | Result |
+|---|---|
+| `GET /` | 200; mobile status HTML |
+| `GET /healthz` | 200; `{"status":"ok"}` |
+| `GET /api/v1/status` | 200; settlement `configuration_required`, connectivity `unchecked` |
+| `POST /api/v1/telemetry/settle` with unsigned `{}` | 503; `service_not_configured` |
+| `GET /service.css` and `/status.js` | 200 |
+| `GET /.env` and `/sql/001_engine.sql` | 404 |
+
+Response headers include no-store caching, nosniff, HTTPS transport security
+and restrictive content security policies. Production ledger installation,
+server credentials, tenant/provider/wallet provisioning, signing keys, the
+refund scheduler and a signed production GC smoke test remain to be configured.

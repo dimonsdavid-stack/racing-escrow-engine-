@@ -58,5 +58,9 @@ PostgreSQL CI suite must pass before enabling funded production traffic.
 
 The designated repository is
 `https://github.com/dimonsdavid-stack/racing-escrow-engine-`.
-Import this repository into the 720studios team as `racing-escrow-engine`.
-The public domain and completed release checks are recorded after deployment.
+It is linked to project `racing-escrow-engine` in the 720studios Vercel team.
+Production URL: `https://racing-escrow-engine.vercel.app/`.
+The initial deployment is READY on Node 24 with Express. Anonymous HTTP checks
+passed for the status page, liveness, status JSON and page assets. Settlement
+returns 503 until configuration is supplied; environment and SQL file requests
+return 404. Native PostgreSQL 15/17 CI passed. See VERIFICATION.md for evidence.
