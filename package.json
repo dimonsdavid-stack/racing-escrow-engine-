@@ -1,6 +1,6 @@
 {
   "name": "racing-escrow-engine",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -11,7 +11,9 @@
     "sweep": "node src/sweep.js",
     "test": "node --test test/*.test.js",
     "test:concurrency": "node --test test/native-concurrency.integration.js",
-    "test:all": "npm test && npm run test:concurrency"
+    "test:all": "npm test && npm run test:concurrency && npm run test:browser",
+    "dev": "node test/browser-server.js",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",
@@ -20,6 +22,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
+    "@playwright/test": "1.63.0",
     "pg": "8.16.3"
   }
 }

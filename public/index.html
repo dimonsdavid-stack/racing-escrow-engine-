@@ -1,31 +1,112 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>Racing Escrow · Service status</title>
-  <link rel="stylesheet" href="/service.css">
-  <script src="/status.js" type="module"></script>
-</head>
-<body>
-  <main>
-    <header><span class="mark" aria-hidden="true">RE</span><span>Racing Escrow</span><span class="version">v1.1.0</span></header>
-    <p class="eyebrow">SIGNED TELEMETRY · ATOMIC SETTLEMENT</p>
-    <h1>Every race.<br>One final outcome.</h1>
-    <p class="intro">The service for validating race results and settling isolated Gold Coin and Sweeps Coin escrows.</p>
-    <section aria-labelledby="status-title">
-      <h2 id="status-title">Service status</h2>
-      <p id="status" role="status" aria-live="polite">Checking service configuration…</p>
-      <p id="detail">Deployment health and database connectivity are verified separately.</p>
-      <a href="/healthz">Check API liveness <span aria-hidden="true">↗</span></a>
-    </section>
-    <div class="features">
-      <article><span class="number">01</span><h2>Separate currencies</h2><p>Independent GC and SC balances, escrow pools and tenant treasuries.</p></article>
-      <article><span class="number">02</span><h2>Signed race results</h2><p>Provider identity is bound to the signature. Only clean, positive laps qualify.</p></article>
-      <article><span class="number">03</span><h2>Atomic outcomes</h2><p>Settlement and journal posting share one transaction. Repeated events cannot pay twice.</p></article>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0c1117" />
+    <meta
+      name="description"
+      content="Race your best clean lap. Practice free, explore circuits, and manage head-to-head challenges with separate GC and SC wallets."
+    />
+    <title>Racing Escrow · Race lobby</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <a class="brand" href="#lobby"
+          ><span class="brand-icon">R/</span
+          ><span>RACING<small>ESCROW</small></span></a
+        >
+        <div class="nav-label">THE GRID</div>
+        <nav>
+          <a href="#lobby" data-nav="lobby">◈ <span>Race lobby</span></a
+          ><a href="#practice" data-nav="practice"
+            >⌁ <span>Practice tracks</span></a
+          ><a href="#races" data-nav="races">⚑ <span>My races</span></a
+          ><a href="#wallet" data-nav="wallet">▣ <span>Wallet</span></a
+          ><a href="#records" data-nav="records"
+            >↗ <span>Personal bests</span></a
+          >
+        </nav>
+        <div class="nav-label">OFF THE TRACK</div>
+        <nav>
+          <a href="#guide" data-nav="guide">ⓘ <span>How racing works</span></a
+          ><a href="#fairplay" data-nav="fairplay">◇ <span>Fair play</span></a
+          ><a href="#settings" data-nav="settings"
+            >⚙ <span>Account & controls</span></a
+          >
+        </nav>
+        <div class="sidebar-bottom">
+          <span class="small-label">CLEAN LAPS. CLEAR RESULTS.</span>
+          <p>Your skill sets the pace.<br />Every coin stays in its lane.</p>
+          <a href="#rules">Rules & eligibility ↗</a>
+        </div>
+      </aside>
+      <div class="main-shell">
+        <header class="topbar">
+          <a class="mobile-brand" href="#lobby">R/</a>
+          <div class="breadcrumb">
+            THE GRID <span>/</span> <strong id="page-label">Race lobby</strong>
+          </div>
+          <div class="top-actions">
+            <div
+              class="currency-switch"
+              role="group"
+              aria-label="Choose currency"
+            >
+              <button id="gc-switch" class="selected" data-currency="GC">
+                GC</button
+              ><button id="sc-switch" data-currency="SC">SC</button>
+            </div>
+            <button class="wallet-summary" data-route="wallet">
+              <span class="coin">G</span
+              ><span id="header-balance">—</span></button
+            ><button class="button primary" id="account-button">
+              Join the grid
+            </button>
+          </div>
+        </header>
+        <main id="content" tabindex="-1">
+          <div class="initial-load">
+            <h1>Your next clean lap starts here.</h1>
+            <p>Loading the race lobby…</p>
+          </div>
+        </main>
+        <footer class="footer">
+          <div>
+            <strong>RACING ESCROW</strong>
+            <p>
+              GC are social-play coins with no cash value. SC are separate
+              promotional assets; SC races and redemption require activated
+              eligibility and provider integrations.
+            </p>
+          </div>
+          <div class="footer-links">
+            <a href="#rules">Rules</a><a href="#privacy">Privacy</a
+            ><a href="#fairplay">Fair play</a><a href="#guide">Help</a>
+          </div>
+        </footer>
+      </div>
     </div>
-    <footer>This page reports the API service. It does not provide race entry, coin purchases or cash redemption.</footer>
-  </main>
-</body>
+    <nav class="mobile-nav" aria-label="Mobile navigation">
+      <a href="#lobby">◈<span>Lobby</span></a
+      ><a href="#practice">⌁<span>Practice</span></a
+      ><a href="#races">⚑<span>My races</span></a
+      ><a href="#wallet">▣<span>Wallet</span></a
+      ><a href="#records">↗<span>Records</span></a>
+    </nav>
+    <dialog id="modal" aria-labelledby="modal-title">
+      <div id="modal-content"></div>
+    </dialog>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <noscript
+      >Enable JavaScript to drive practice laps and use the racing
+      app.</noscript
+    >
+  </body>
 </html>

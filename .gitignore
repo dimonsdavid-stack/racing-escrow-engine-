@@ -6,3 +6,6 @@ reports/
 .vercel/
 .env.*
 !.env.example
+supabase/.temp/
+playwright-report/
+test-results/

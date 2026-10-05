@@ -4,7 +4,7 @@ Deploy this directory as the repository root. The root `server.js` exports
 an Express application using Vercel's first-class Node.js backend support.
 Use Node.js 24, the committed lockfile, and `npm ci`. No build or output
 directory override is required. `vercel.json` sets a 60-second function limit,
-includes health page assets, and applies security headers to static responses.
+includes customer app assets, and applies security headers to static responses.
 
 With an authenticated Vercel CLI, from this directory:
 
@@ -25,9 +25,16 @@ target, then rebuild:
 - `SUPABASE_URL`: the racing ledger's HTTPS project URL.
 - `SUPABASE_SERVICE_ROLE_KEY`: its server-only service-role key.
 - `TELEMETRY_KEYS_JSON`: the tenant/provider signing registry from `.env.example`.
+- `SUPABASE_PUBLISHABLE_KEY`: public auth key from the dedicated racing project.
+- `RACING_TENANT_ID`: the dedicated customer tenant UUID.
+- `CRON_SECRET`: random secret, at least 32 characters, for the optional HTTP refund worker.
+
+Apply `sql/001_engine.sql`, then `supabase/migrations/20261005224115_customer_app.sql`.
+Enable customer enrollment only after Auth confirmation, SMTP and production
+redirect URLs are configured. See CUSTOMER_APP.md.
 
 No real secrets are included. Missing or invalid configuration serves the
-health page but returns `503 service_not_configured` to every settlement POST.
+customer app but returns `503 service_not_configured` to every settlement POST.
 The standalone `npm start` retains strict startup validation.
 
 Apply the fresh-install SQL only to the designated racing database. Provision
@@ -36,14 +43,19 @@ Do not attach unrelated projects' database credentials.
 
 ## Refund scheduler
 
-The included worker is a CLI, not an HTTP cron route. Run `npm run sweep` every
+Run the CLI `npm run sweep` every
 minute on a separate trusted scheduler with the same server credentials.
-This deployment does not automatically configure a scheduler. Verify the
+Alternatively invoke `GET /api/v1/operations/refund-expired` every minute with
+`Authorization: Bearer <CRON_SECRET>`. The route processes up to ten overdue
+races per invocation with bounded RPC timeouts and reports failures as 503.
+Overlapping invocations are safe. Vercel minute cron requires a plan supporting
+it; this release does not silently upgrade billing or register a scheduler.
+Monitor backlog and increase worker capacity as traffic grows. Verify the
 scheduler before creating live funded challenges; it releases expired sessions.
 
 ## Live checks
 
-- `GET /`: mobile-friendly service status page.
+- `GET /`: responsive racing lobby and playable practice app.
 - `GET /healthz`: HTTP liveness; expect 200 and `{"status":"ok"}`.
 - `GET /api/v1/status`: reports loaded configuration only. It explicitly marks
   database connectivity as unchecked and does not expose secrets or identities.
@@ -61,6 +73,6 @@ The designated repository is
 It is linked to project `racing-escrow-engine` in the 720studios Vercel team.
 Production URL: `https://racing-escrow-engine.vercel.app/`.
 The initial deployment is READY on Node 24 with Express. Anonymous HTTP checks
-passed for the status page, liveness, status JSON and page assets. Settlement
+passed for the original service page, liveness, status JSON and page assets. Settlement
 returns 503 until configuration is supplied; environment and SQL file requests
 return 404. Native PostgreSQL 15/17 CI passed. See VERIFICATION.md for evidence.

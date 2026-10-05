@@ -1,16 +1,24 @@
 # Racing Escrow Engine
 
-An executable Node.js/Express and PostgreSQL core for two-participant GC/SC
-challenge funding, signed race telemetry, settlement, and zero-fee refunds.
-The included REST surface is a **trusted telemetry-provider webhook**, not a
-browser endpoint for spending another participant's balance.
+A mobile racing application with playable, coin-free time attack and a PostgreSQL
+escrow engine for verified head-to-head challenges. The lobby, practice controls,
+search, personal records, wallet, receipts and account controls share one responsive
+customer interface. Provider telemetry is the only authority for funded outcomes.
 
-Production service: https://racing-escrow-engine.vercel.app/
+Live app: https://racing-escrow-engine.vercel.app/
 Source: https://github.com/dimonsdavid-stack/racing-escrow-engine-
-The service is deployed; settlement remains disabled until server credentials,
-the racing ledger, provider identities and the refund scheduler are provisioned.
+
+**Deployment is not commercial activation.** Free practice runs immediately.
+Confirmed-email accounts, journal-backed grants and customer challenges require
+a dedicated Supabase database and the migration/configuration below. No racing
+Supabase project has been provisioned yet. SC eligibility, payments, cash
+redemption and provider/session delivery require operator integrations; they are
+not simulated. See CUSTOMER_APP.md for the precise activation boundary.
 
 ## Source map
+
+Customer application implementation and activation: [CUSTOMER_APP.md](CUSTOMER_APP.md).
+
 
 | File | Purpose |
 |---|---|
@@ -20,9 +28,9 @@ the racing ledger, provider identities and the refund scheduler are provisioned.
 | `src/telemetry.js` | Strict payload validation, clean-lap filtering, microsecond minimums and winner calculation |
 | `src/signature.js` | Raw-body HMAC verification and tenant/provider key binding |
 | `src/settlement.js` | Supabase JS integration; single atomic RPC per attempt; safe retry handling |
-| `src/app.js` | `POST /api/v1/telemetry/settle` and liveness endpoint |
+| `src/app.js` | Signed telemetry, authenticated customer and refund-worker REST endpoints |
 | `server.js` / `src/runtime.js` / `vercel.json` | Vercel Express entrypoint and disabled settlement when server configuration is missing |
-| `public/` / `DEPLOYMENT.md` | Mobile-friendly service status page and deployment instructions |
+| `public/` / `DEPLOYMENT.md` | Responsive customer racing app and deployment instructions |
 | `src/server.js` | Configuration checks, HTTP limits and graceful shutdown |
 | `src/sweep.js` | Expired-session refund worker |
 | `src/logging.js` | Sync/async logging failures isolated from committed financial outcomes |
@@ -114,8 +122,9 @@ balance update or assumes funds are still locked after a lost response.
    `authenticated`, and `service_role` roles; create those roles first on plain
    PostgreSQL. Do not apply `002` or `003` as schema migrations.
 2. Keep `race_private` **out of the Data API exposed schemas**. Ensure `public`
-   is an exposed RPC schema. The public wrappers use SECURITY INVOKER; only
-   `service_role` may execute them. Private SECURITY DEFINER implementations
+   is an exposed RPC schema. The financial public wrappers use SECURITY INVOKER; only
+   `service_role` may execute those primitives. The customer migration adds
+   separately authorized wrappers for confirmed authenticated sessions. Private SECURITY DEFINER implementations
    have fixed `search_path`, qualified object references and explicit grants.
    Direct table DML is denied even to `service_role`. RLS is enabled on every
    private table and no browser access policies are defined.
@@ -293,8 +302,8 @@ workflow; automation never releases a disputed escrow.
 Place the API behind TLS and a gateway with shared rate limits, ingress access
 controls, bounded request timeouts and DDoS protections. Do not expose the
 signing route as a mobile client write interface. Supabase service credentials
-and provider secrets remain server-only. Route user-facing balance/read flows
-through separately authenticated, tenant-scoped application APIs.
+and provider secrets remain server-only. Customer balance/read flows use verified bearer sessions and tenant-scoped RPCs
+that derive wallet identity from auth.uid(), never request-body actor IDs.
 
 Use PostgreSQL `fsync=on`, `synchronous_commit=on`, appropriate durable storage,
 backups/PITR and a tested restore procedure. Configure the actual RPC transaction
