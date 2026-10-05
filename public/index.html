@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Racing Escrow · Service status</title>
+  <link rel="stylesheet" href="/service.css">
+  <script src="/status.js" type="module"></script>
+</head>
+<body>
+  <main>
+    <header><span class="mark" aria-hidden="true">RE</span><span>Racing Escrow</span><span class="version">v1.1.0</span></header>
+    <p class="eyebrow">SIGNED TELEMETRY · ATOMIC SETTLEMENT</p>
+    <h1>Every race.<br>One final outcome.</h1>
+    <p class="intro">The service for validating race results and settling isolated Gold Coin and Sweeps Coin escrows.</p>
+    <section aria-labelledby="status-title">
+      <h2 id="status-title">Service status</h2>
+      <p id="status" role="status" aria-live="polite">Checking service configuration…</p>
+      <p id="detail">Deployment health and database connectivity are verified separately.</p>
+      <a href="/healthz">Check API liveness <span aria-hidden="true">↗</span></a>
+    </section>
+    <div class="features">
+      <article><span class="number">01</span><h2>Separate currencies</h2><p>Independent GC and SC balances, escrow pools and tenant treasuries.</p></article>
+      <article><span class="number">02</span><h2>Signed race results</h2><p>Provider identity is bound to the signature. Only clean, positive laps qualify.</p></article>
+      <article><span class="number">03</span><h2>Atomic outcomes</h2><p>Settlement and journal posting share one transaction. Repeated events cannot pay twice.</p></article>
+    </div>
+    <footer>This page reports the API service. It does not provide race entry, coin purchases or cash redemption.</footer>
+  </main>
+</body>
+</html>

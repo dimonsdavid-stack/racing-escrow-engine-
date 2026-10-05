@@ -1,0 +1,19 @@
+{
+  "event_id": "55555555-5555-4555-8555-555555555555",
+  "challenge_id": "44444444-4444-4444-8444-444444444444",
+  "session_id": "33333333-3333-4333-8333-333333333333",
+  "challenger_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "opponent_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  "final": true,
+  "race_status": "completed",
+  "drivers": [
+    { "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "laps": [
+      { "is_clean": false, "lap_time_seconds": "1.000000" },
+      { "is_clean": true, "lap_time_seconds": 0 },
+      { "is_clean": true, "lap_time_seconds": "64.123456" }
+    ] },
+    { "user_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "laps": [
+      { "is_clean": true, "lap_time_seconds": "65.000001" }
+    ] }
+  ]
+}
