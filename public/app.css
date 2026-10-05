@@ -1349,3 +1349,9 @@ dialog::backdrop {
     flex-wrap: wrap;
   }
 }
+
+.quick-controls {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}

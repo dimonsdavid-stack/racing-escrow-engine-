@@ -205,7 +205,7 @@ function races() {
           "No funded races yet.",
           "Create an offer or join a challenge when a racing provider is connected. Every funded race appears here with its receipt.",
         )
-      : `<div class="table-scroll panel"><table class="race-table"><thead><tr><th>RACE</th><th>ENTRY</th><th>STATUS</th><th>OUTCOME</th><th>RECEIPT</th></tr></thead><tbody>${state.user.races.map((r) => `<tr><td><strong>${escape(track(r.track_id)?.title ?? "Provider race")}</strong><p>@${escape(r.opponent ?? "Racer")} · ${date(r.created_at)}</p></td><td>${coins(r.entry_fee)} ${r.token_type}</td><td><span class="pill ${r.status === "Active" ? "gold" : "muted"}">${r.status}</span></td><td>${r.status === "Settled" ? (r.resolution === "winner" ? (r.winner_id === state.user.user_id ? "Won" : "Completed") : "Refunded") : "Awaiting verified telemetry"}</td><td><button class="button small ghost" data-receipt="${r.id}">View ↗</button></td></tr>`).join("")}</tbody></table></div>`)
+      : `<div class="table-scroll panel"><table class="race-table"><thead><tr><th>RACE</th><th>ENTRY</th><th>STATUS</th><th>OUTCOME</th><th>RECEIPT</th></tr></thead><tbody>${state.user.races.map((r) => `<tr><td><strong>${escape(track(r.track_id)?.title ?? "Provider race")}</strong><p>@${escape(r.opponent ?? "Racer")} · ${date(r.created_at)}</p></td><td>${coins(r.entry_fee)} ${r.token_type}</td><td><span class="pill ${r.status === "Active" ? "gold" : "muted"}">${r.status}</span></td><td>${r.status === "Settled" ? (r.resolution === "winner" ? (r.winner_id === state.user.user_id ? "Won" : "Lost") : "Refunded") : "Awaiting verified telemetry"}</td><td><button class="button small ghost" data-receipt="${r.id}">View ↗</button></td></tr>`).join("")}</tbody></table></div>`)
   );
 }
 function wallet() {
@@ -377,8 +377,13 @@ function updateHeader() {
   $("#account-button").textContent = state.user
     ? "@" + state.user.handle
     : "Join the grid";
-  for (const b of document.querySelectorAll("[data-currency]"))
+  for (const b of document.querySelectorAll("[data-currency]")) {
     b.classList.toggle("selected", b.dataset.currency === state.currency);
+    b.setAttribute(
+      "aria-pressed",
+      String(b.dataset.currency === state.currency),
+    );
+  }
 }
 function render() {
   const name = location.hash.slice(1).split("/")[0] || "lobby";
@@ -836,7 +841,7 @@ function renderGame(id) {
       "Free practice · 3 clockwise laps · Clean laps only",
       `<a class="button ghost small" href="#practice">← Tracks</a>`,
     ) +
-    `<div class="game-layout"><section class="game-panel"><div class="game-hud"><div><small>LAP</small><div class="hud-value" id="lap-counter">1 / 3</div></div><div><small>LAP TIME</small><div class="hud-value" id="lap-time">0:00.000</div></div><div><small>BEST CLEAN</small><div class="hud-value" id="best-time">—</div></div><div><small>SPEED</small><div class="hud-value" id="speed">0</div></div></div><div class="game-banner" id="game-state" role="status">Ready to drive. Practice never moves wallet coins.</div><canvas class="game-canvas" id="race-canvas" tabindex="0" aria-label="Practice racing circuit. Use arrow keys to drive clockwise."></canvas><div class="game-controls"><div class="touch-steering"><button class="drive-button" data-drive="left" aria-label="Steer left">←</button><button class="drive-button" data-drive="right" aria-label="Steer right">→</button></div><div class="touch-steering"><button class="drive-button" data-drive="brake" aria-label="Brake">▰</button><button class="drive-button throttle" data-drive="throttle" aria-label="Accelerate">THROTTLE</button></div></div><p class="game-note">Arrows / WASD · Hold controls on mobile · Pass every sector clockwise</p></section><aside class="game-sidebar"><section class="panel"><span class="pill">TIME ATTACK</span><h3 style="margin-top:18px">Find a clean line.</h3><p>Cross a track edge and that lap is invalid. Complete three laps to save this session.</p><p class="clean-indicator" id="clean-lap">CLEAN LAP</p><div class="game-actions"><button class="button primary small" id="play-game">Drive ▶</button><button class="button ghost small" id="pause-game">Pause</button><button class="button ghost small" id="reset-game">Restart ↻</button></div></section><section class="panel"><h3>Session laps</h3><div id="session-laps"><p>No completed laps yet.</p></div><a class="text-link" href="#records">Your personal bests ↗</a></section></aside></div>`;
+    `<div class="game-layout"><section class="game-panel"><div class="game-hud"><div><small>LAP</small><div class="hud-value" id="lap-counter">1 / 3</div></div><div><small>LAP TIME</small><div class="hud-value" id="lap-time">0:00.000</div></div><div><small>BEST CLEAN</small><div class="hud-value" id="best-time">—</div></div><div><small>SPEED</small><div class="hud-value" id="speed">0</div></div></div><div class="game-actions quick-controls"><button class="button primary small" id="play-game">Drive ▶</button><button class="button ghost small" id="pause-game">Pause</button><button class="button ghost small" id="reset-game">Restart ↻</button></div><div class="game-banner" id="game-state" role="status">Ready to drive. Practice never moves wallet coins.</div><canvas class="game-canvas" id="race-canvas" tabindex="0" aria-label="Practice racing circuit. Use arrow keys to drive clockwise."></canvas><div class="game-controls"><div class="touch-steering"><button class="drive-button" data-drive="left" aria-label="Steer left">←</button><button class="drive-button" data-drive="right" aria-label="Steer right">→</button></div><div class="touch-steering"><button class="drive-button" data-drive="brake" aria-label="Brake">▰</button><button class="drive-button throttle" data-drive="throttle" aria-label="Accelerate">THROTTLE</button></div></div><p class="game-note">Arrows / WASD · Hold controls on mobile · Pass every sector clockwise</p></section><aside class="game-sidebar"><section class="panel"><span class="pill">TIME ATTACK</span><h3 style="margin-top:18px">Find a clean line.</h3><p>Cross a track edge and that lap is invalid. Complete three laps to save this session.</p><p class="clean-indicator" id="clean-lap">CLEAN LAP</p></section><section class="panel"><h3>Session laps</h3><div id="session-laps"><p>No completed laps yet.</p></div><a class="text-link" href="#records">Your personal bests ↗</a></section></aside></div>`;
   let lastLapCount = 0;
   state.game = startPractice({
     track: t,

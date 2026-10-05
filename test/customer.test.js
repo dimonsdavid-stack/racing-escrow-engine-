@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { T, P, A, B } from "./fixtures.js";
 import { createApp } from "../src/app.js";
+import { customerConfig } from "../src/customer.js";
 import {
   createPractice,
   updatePractice,
@@ -14,6 +15,45 @@ const migration = new URL(
   "../supabase/migrations/20261005224115_customer_app.sql",
   import.meta.url,
 );
+test("public auth configuration rejects server secrets, service-role JWTs and unapproved origins", () => {
+  const env = {
+    SUPABASE_URL: "https://example.supabase.co",
+    RACING_TENANT_ID: T,
+    SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+  };
+  assert.ok(customerConfig(env));
+  for (const role of ["service_role", "authenticated"]) {
+    const jwt =
+      "eyJhbGciOiJIUzI1NiJ9." +
+      Buffer.from(JSON.stringify({ role })).toString("base64url") +
+      ".signature";
+    assert.equal(
+      customerConfig({ ...env, SUPABASE_PUBLISHABLE_KEY: jwt }),
+      null,
+    );
+  }
+  assert.equal(
+    customerConfig({
+      ...env,
+      SUPABASE_PUBLISHABLE_KEY: "sb_secret_server_only",
+    }),
+    null,
+  );
+  assert.equal(
+    customerConfig({
+      ...env,
+      SUPABASE_URL: "https://example.supabase.co.attacker.test",
+    }),
+    null,
+  );
+  assert.equal(
+    customerConfig({
+      ...env,
+      SUPABASE_URL: "https://user:password@example.supabase.co",
+    }),
+    null,
+  );
+});
 async function database() {
   const db = new PGlite();
   await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role;CREATE SCHEMA auth;
