@@ -9,3 +9,6 @@ reports/
 supabase/.temp/
 playwright-report/
 test-results/
+frontend/.next/
+frontend/out/
+!.env.production.example

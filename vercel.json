@@ -1,17 +1,25 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "headers": [{
-    "source": "/(.*)",
-    "headers": [
-      {"key": "Cache-Control", "value": "no-store"},
-      {"key": "X-Content-Type-Options", "value": "nosniff"},
-      {"key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}
-    ]
-  }],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    }
+  ],
   "functions": {
     "server.js": {
       "maxDuration": 60,
-      "includeFiles": "public/**"
+      "includeFiles": "frontend/out/**"
     }
-  }
+  },
+  "buildCommand": "npm run build"
 }

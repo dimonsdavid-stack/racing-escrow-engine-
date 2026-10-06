@@ -17,7 +17,15 @@ export function createRuntimeApp(env = process.env) {
   } catch {
     keys = new Map();
   }
+  let brokerKeys;
+  try {
+    brokerKeys = parseKeys(env.DISCORD_BROKER_KEYS_JSON || "[]");
+  } catch {
+    brokerKeys = new Map();
+  }
   return createApp({
+    env,
+    brokerKeys,
     client,
     keys,
     customerOptions: { env },

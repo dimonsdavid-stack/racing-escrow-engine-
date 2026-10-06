@@ -1,14 +1,21 @@
 import express from "express";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { authenticate, SIGNING_PATH } from "./signature.js";
+import { ProviderReport, commitProviderReport } from "./providers.js";
 import { Telemetry, decide } from "./telemetry.js";
 import { RpcError, settleCalculatedWinner, retryable } from "./settlement.js";
 import { safeLogger } from "./logging.js";
+import { readFileSync, existsSync } from "node:fs";
+import { createCommerceRouter } from "./commerce.js";
+import { createProviderRouter } from "./provider-routes.js";
+import { createOAuthRouter, createSteamRouter } from "./oauth.js";
 import { fileURLToPath } from "node:url";
 import { createCustomerRouter } from "./customer.js";
 import { sweep } from "./sweep.js";
 
-const publicDirectory = fileURLToPath(new URL("../public/", import.meta.url));
+const publicDirectory = fileURLToPath(
+  new URL("../frontend/out/", import.meta.url),
+);
 
 export function createApp({
   client,
@@ -17,10 +24,32 @@ export function createApp({
   rpcOptions,
   customerOptions,
   cronSecret,
+  env = process.env,
+  brokerKeys = new Map(),
+  stripe,
 } = {}) {
   const writeLog = safeLogger(log);
   const configured = Boolean(client && keys.size);
   const app = express();
+  const htmlPath = publicDirectory + "index.html";
+  const hashes = existsSync(htmlPath)
+    ? [
+        ...readFileSync(htmlPath, "utf8").matchAll(
+          /<script([^>]*)>([\s\S]*?)<\/script>/g,
+        ),
+      ]
+        .filter((m) => !m[1].includes("src="))
+        .map(
+          (m) =>
+            "'sha256-" +
+            createHash("sha256").update(m[2]).digest("base64") +
+            "'",
+        )
+    : [];
+  const pageCSP =
+    "default-src 'self'; script-src 'self' " +
+    hashes.join(" ") +
+    "; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
   app.disable("x-powered-by");
   app.set("trust proxy", false);
   app.use((req, res, next) => {
@@ -61,11 +90,15 @@ export function createApp({
   app.get("/api/v1/status", (_req, res) =>
     res.json({
       service: "racing-escrow-engine",
-      version: "2.0.0",
+      version: "3.0.0",
       settlement: configured ? "configured" : "configuration_required",
       database_connectivity: "unchecked",
     }),
   );
+  app.use(createCommerceRouter({ client, env, stripe }));
+  app.use(createProviderRouter({ client, keys, brokerKeys }));
+  app.use(createOAuthRouter({ client, env }));
+  app.use(createSteamRouter({ client, env }));
   app.use(
     express.static(publicDirectory, {
       dotfiles: "deny",
@@ -73,10 +106,7 @@ export function createApp({
       etag: false,
       lastModified: false,
       setHeaders(res) {
-        res.set(
-          "Content-Security-Policy",
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
-        );
+        res.set("Content-Security-Policy", pageCSP);
       },
     }),
   );
@@ -106,6 +136,25 @@ export function createApp({
         );
       } catch {
         return res.status(400).json({ error: "invalid_json" });
+      }
+      if (decoded && typeof decoded.source_id === "string") {
+        const parsed = ProviderReport.safeParse(decoded);
+        if (!parsed.success)
+          return res.status(422).json({ error: "invalid_provider_report" });
+        try {
+          return res.json(
+            await commitProviderReport(
+              client,
+              identity,
+              parsed.data,
+              createHash("sha256").update(req.body).digest("hex"),
+            ),
+          );
+        } catch (e) {
+          return res
+            .status(e.code === "PT403" ? 403 : e.code === "PT409" ? 409 : 503)
+            .json({ error: "provider_result_rejected_or_retry_required" });
+        }
       }
       const parsed = Telemetry.safeParse(decoded);
       if (!parsed.success)
@@ -155,16 +204,24 @@ export function createApp({
           { PT400: 400, PT403: 403, PT404: 404, PT409: 409, 23505: 409 }[
             error.code
           ] ?? 500;
-        return res
-          .status(status)
-          .json({
-            error: status === 500 ? "internal_error" : "event_rejected",
-            request_id: req.requestId,
-          });
+        return res.status(status).json({
+          error: status === 500 ? "internal_error" : "event_rejected",
+          request_id: req.requestId,
+        });
       }
     },
   );
-  app.use("/api/v1/app", createCustomerRouter(customerOptions));
+  const customerRouter = createCustomerRouter({
+    env,
+    admin: client,
+    stripe,
+    ...customerOptions,
+  });
+  app.use("/api/v1/stripe/create-checkout", (req, res, next) => {
+    req.url = "/checkout";
+    customerRouter(req, res, next);
+  });
+  app.use("/api/v1/app", customerRouter);
   app.use((_req, res) => res.status(404).json({ error: "not_found" }));
   app.use((error, req, res, _next) => {
     const status =

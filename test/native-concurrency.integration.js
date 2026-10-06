@@ -658,6 +658,199 @@ test("native PostgreSQL concurrent escrow mutations", async (t) => {
         );
       },
     );
+    await t.test(
+      "external simulator acceptance and purchase fulfillment serialize independent worker retries",
+      async () => {
+        await admin.query(
+          await readFile(
+            new URL(
+              "../supabase/migrations/20261006073056_sim_racing_commerce.sql",
+              import.meta.url,
+            ),
+            "utf8",
+          ),
+        );
+        const ids = [randomUUID(), randomUUID(), randomUUID()],
+          authIds = [randomUUID(), randomUUID(), randomUUID()],
+          event = randomUUID();
+        const provider = (
+          await admin.query(
+            "SELECT id FROM race_private.providers WHERE tenant_id=$1",
+            [T],
+          )
+        ).rows[0].id;
+        await admin.query(
+          "UPDATE race_private.tenants SET commerce_enabled=true WHERE id=$1",
+          [T],
+        );
+        for (let i = 0; i < ids.length; i++) {
+          await admin.query(
+            "INSERT INTO race_private.users(tenant_id,id,auth_user_id) VALUES($1,$2,$3)",
+            [T, ids[i], authIds[i]],
+          );
+          await admin.query(
+            "INSERT INTO race_private.profiles(tenant_id,user_id,handle,sc_eligible) VALUES($1,$2,$3,true)",
+            [T, ids[i], "External_" + i],
+          );
+          await admin.query("SELECT public.credit_wallet($1,$2,'GC',100,$3)", [
+            T,
+            ids[i],
+            "external-seed:" + i,
+          ]);
+          await admin.query(
+            "SELECT public.sim_link_identity($1,$2,'iracing',$3)",
+            [T, authIds[i], String(100 + i)],
+          );
+          await admin.query(
+            "SELECT public.sim_link_identity($1,$2,'discord',$3)",
+            [T, authIds[i], String(100000000000000000n + BigInt(i))],
+          );
+        }
+        await admin.query(
+          "INSERT INTO race_private.sim_events(tenant_id,id,provider_id,game,external_session_id,title,track_name,starts_at,funding_closes_at,deadline,rule,entrants) VALUES($1,$2,$3,'iracing','native-session','Native sim race','Spa',now()+interval '30 minutes',now()+interval '20 minutes',now()+interval '2 hours','fastest_clean_lap','[\"100\",\"101\",\"102\"]')",
+          [T, event, provider],
+        );
+        const offer = randomUUID();
+        await admin.query(
+          "SELECT public.sim_discord_offer($1,'100000000000000000','100000000000000001',$2,$3,'GC','10.00')",
+          [T, offer, event],
+        );
+        const accepted = await concurrent(
+          Array.from(
+            { length: 8 },
+            () => (c) =>
+              c.query(
+                "SELECT public.sim_discord_accept($1,'100000000000000001',$2) AS r",
+                [T, offer],
+              ),
+          ),
+        );
+        assert.equal(
+          accepted.filter((r) => r.status === "fulfilled").length,
+          8,
+        );
+        assert.equal(
+          accepted.filter((r) => r.value?.rows[0].r.duplicate === false).length,
+          1,
+        );
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT sum(gc_balance)::text AS n FROM race_private.users WHERE id=ANY($1::uuid[])",
+              [ids],
+            )
+          ).rows[0].n,
+          "280.000000",
+        );
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT remaining_escrow::text AS n FROM race_private.challenges WHERE id=$1",
+              [offer],
+            )
+          ).rows[0].n,
+          "20.000000",
+        );
+        const order = randomUUID();
+        await admin.query(
+          "INSERT INTO race_private.commerce_catalog VALUES($1,'native_pack',1000,10000,10,true)",
+          [T],
+        );
+        await admin.query(
+          "INSERT INTO race_private.commerce_orders(tenant_id,id,user_id,package_id,amount_cents,gc,sc) VALUES($1,$2,$3,'native_pack',1000,10000,10)",
+          [T, order, ids[0]],
+        );
+        const fulfilled = await concurrent(
+          Array.from(
+            { length: 8 },
+            () => (c) =>
+              c.query(
+                "SELECT public.fulfill_coin_purchase($1,$2,'cs_test_native','pi_native','evt_native',1000,'usd') AS r",
+                [T, order],
+              ),
+          ),
+        );
+        assert.equal(
+          fulfilled.filter((r) => r.status === "fulfilled").length,
+          8,
+        );
+        assert.equal(
+          fulfilled.filter((r) => r.value?.rows[0].r.duplicate === false)
+            .length,
+          1,
+        );
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT gc_balance::text AS gc,sc_balance::text AS sc FROM race_private.users WHERE id=$1",
+              [ids[0]],
+            )
+          ).rows[0].gc,
+          "10090.000000",
+        );
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT count(*)::int AS n FROM race_private.payment_ledgers",
+            )
+          ).rows[0].n,
+          1,
+        );
+        // Fail after wallet posting, before evidence receipt. The entire RPC rolls back.
+        const context = (
+          await admin.query("SELECT public.sim_result_context($1,$2) AS r", [
+            T,
+            offer,
+          ])
+        ).rows[0].r;
+        await admin.query(
+          "CREATE FUNCTION race_private.reject_evidence_test() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RAISE EXCEPTION 'evidence_disk_failure';END$$; CREATE TRIGGER reject_evidence_test BEFORE INSERT ON race_private.provider_evidence FOR EACH ROW EXECUTE FUNCTION race_private.reject_evidence_test();",
+        );
+        const values = [
+          T,
+          provider,
+          offer,
+          "native:" + offer,
+          "native-session",
+          "Spa",
+          context.starts_at,
+          "a".repeat(64),
+          "winner",
+          "60",
+          "62",
+          {},
+        ];
+        const statement =
+          "SELECT public.sim_commit_result(" +
+          values.map((_, i) => "$" + (i + 1)).join(",") +
+          ")";
+        await assert.rejects(
+          admin.query(statement, values),
+          /evidence_disk_failure/,
+        );
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT remaining_escrow::text AS n FROM race_private.challenges WHERE id=$1",
+              [offer],
+            )
+          ).rows[0].n,
+          "20.000000",
+        );
+        await admin.query(
+          "DROP TRIGGER reject_evidence_test ON race_private.provider_evidence",
+        );
+        await admin.query(statement, values);
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT sum(delta)::text AS n FROM race_private.journal_lines",
+            )
+          ).rows[0].n,
+          "0.000000",
+        );
+      },
+    );
   } finally {
     admin?.release();
     await pool.end();

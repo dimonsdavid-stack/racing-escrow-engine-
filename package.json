@@ -1,6 +1,6 @@
 {
   "name": "racing-escrow-engine",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,16 +13,26 @@
     "test:concurrency": "node --test test/native-concurrency.integration.js",
     "test:all": "npm test && npm run test:concurrency && npm run test:browser",
     "dev": "node test/browser-server.js",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "build": "NEXT_TELEMETRY_DISABLED=1 node scripts/build-schema.js && NEXT_TELEMETRY_DISABLED=1 next build frontend --webpack",
+    "worker": "node src/worker.js",
+    "discord": "node discord/bot.js",
+    "discord:register": "node discord/bot.js --register"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",
+    "discord.js": "14.27.0",
     "express": "5.2.1",
+    "next": "16.3.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "stripe": "23.0.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
     "@playwright/test": "1.63.0",
-    "pg": "8.16.3"
+    "pg": "8.16.3",
+    "prettier": "3.7.4"
   }
 }

@@ -98,10 +98,12 @@ test("Vercel entrypoint imports without secrets and serves customer app assets",
     assert.equal(page.headers.get("x-powered-by"), null);
     const html = await page.text();
     assert.match(html, /name="viewport"/);
-    assert.match(html, /type="module" src="\/app.js"/);
-    for (const path of ["/app.css", "/app.js", "/game.js", "/physics.js"]) {
-      assert.equal((await fetch(`${origin}${path}`)).status, 200);
+    assert.match(html, /GRID/);
+    assert.match(html, /\/_next\/static/);
+    for (const path of ["/game.js", "/physics.js"]) {
+      assert.equal((await fetch(`${origin}${path}`)).status, 404);
     }
+    assert.equal((await fetch(`${origin}/manifest.webmanifest`)).status, 200);
     assert.equal((await fetch(`${origin}/.env`)).status, 404);
     assert.equal((await fetch(`${origin}/sql/001_engine.sql`)).status, 404);
   });

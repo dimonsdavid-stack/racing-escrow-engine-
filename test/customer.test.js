@@ -6,11 +6,6 @@ import { PGlite } from "@electric-sql/pglite";
 import { T, P, A, B } from "./fixtures.js";
 import { createApp } from "../src/app.js";
 import { customerConfig } from "../src/customer.js";
-import {
-  createPractice,
-  updatePractice,
-  bestCleanLap,
-} from "../public/physics.js";
 const migration = new URL(
   "../supabase/migrations/20261005224115_customer_app.sql",
   import.meta.url,
@@ -287,7 +282,8 @@ test("customer REST verifies bearer identity, ignores body actor injection and p
       headers,
       body: JSON.stringify({
         request_id: randomUUID(),
-        track_id: "coastal",
+        event_id: P,
+        mode: "driver_duel",
         token_type: "GC",
         entry_fee: "10.00",
         user_id: B,
@@ -300,13 +296,14 @@ test("customer REST verifies bearer identity, ignores body actor injection and p
       headers,
       body: JSON.stringify({
         request_id: randomUUID(),
-        track_id: "coastal",
+        event_id: P,
+        mode: "driver_duel",
         token_type: "GC",
         entry_fee: "10.00",
       }),
     });
     assert.equal(r.status, 200);
-    assert.equal(calls[0].name, "race_offer");
+    assert.equal(calls[0].name, "sim_offer");
     assert.equal(calls[0].args.p_tenant_id, T);
     assert.equal(calls[0].args.p_user_id, undefined);
     const config = await (await fetch(origin + "/api/v1/app/config")).json();
@@ -314,57 +311,5 @@ test("customer REST verifies bearer identity, ignores body actor injection and p
     assert.equal(config.commerce_available, false);
   } finally {
     await new Promise((r) => server.close(r));
-  }
-});
-test("practice physics caps time steps and speed; off-track laps cannot become clean records", () => {
-  const s = createPractice();
-  for (let i = 0; i < 1000; i++) updatePractice(s, { throttle: true }, 100);
-  assert.ok(s.speed <= s.preset.maxSpeed);
-  assert.ok(s.time < 34);
-  assert.equal(s.dirty, true);
-  assert.equal(
-    bestCleanLap([
-      { seconds: 0, is_clean: true },
-      { seconds: 12, is_clean: false },
-    ]),
-    null,
-  );
-  assert.equal(
-    bestCleanLap([
-      { seconds: 20, is_clean: true },
-      { seconds: 18, is_clean: true },
-      { seconds: 10, is_clean: false },
-    ]),
-    18,
-  );
-});
-test("all practice circuits can complete three clean clockwise laps through actual simulation", () => {
-  for (const id of ["coastal", "club", "night"]) {
-    const s = createPractice(id);
-    for (let i = 0; i < 60000 && !s.complete; i++) {
-      const angle =
-        Math.atan2((s.y - 300) / s.preset.ry, (s.x - 400) / s.preset.rx) + 0.28;
-      const desired = Math.atan2(
-        300 + Math.sin(angle) * s.preset.ry - s.y,
-        400 + Math.cos(angle) * s.preset.rx - s.x,
-      );
-      const difference = Math.atan2(
-        Math.sin(desired - s.heading),
-        Math.cos(desired - s.heading),
-      );
-      updatePractice(
-        s,
-        {
-          throttle: s.speed < 110,
-          right: difference > 0.01,
-          left: difference < -0.01,
-        },
-        1 / 120,
-      );
-    }
-    assert.equal(s.complete, true, id);
-    assert.equal(s.laps.length, 3);
-    assert.ok(s.laps.every((l) => l.is_clean && l.seconds > 6));
-    assert.ok(bestCleanLap(s.laps) > 0);
   }
 });
