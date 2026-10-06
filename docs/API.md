@@ -2,41 +2,44 @@
 
 All customer calls require `Authorization: Bearer <verified Supabase session access token>`. Actors and tenant are resolved by the server and SQL session, never accepted as arbitrary body claims. JSON schemas reject extra fields. Currency amounts are decimal strings.
 
-| Method / path | Body / behavior |
-|---|---|
-| GET `/healthz` | Process liveness only |
-| GET `/api/v1/status` | Version and configuration state; does not assert database connectivity |
-| GET `/api/v1/app/config` | Public publishable config and integration activation flags |
-| POST `/api/v1/app/enroll` | `{ "handle":"Driver_1", "accept_terms":true }` |
-| GET `/api/v1/app/me` | Exact balance strings, locked entries, journal history, identities and external contracts |
-| GET `/api/v1/app/lobby` | Registered upcoming external events and eligible open challenges |
-| POST `/api/v1/app/offers` | `{ "request_id":"uuid", "event_id":"uuid", "mode":"driver_duel", "token_type":"GC", "entry_fee":"10.00", "selection":null, "target_id":null }` |
-| POST `/api/v1/app/accept` | `{ "offer_id":"uuid", "accept_terms":true, "selection":null }`; event match requires a distinct registered selection |
-| POST `/api/v1/app/cancel` | `{ "offer_id":"uuid" }`; creator only, before acceptance |
-| POST `/api/v1/app/request-result` | `{ "challenge_id":"uuid" }`; queues validation, takes no winner/laps |
-| POST `/api/v1/app/daily` | `{}`; journaled GC grant, once per UTC day |
-| POST `/api/v1/app/pause` | `{ "hours":24 }`; permitted values 1, 24, 168 |
-| POST `/api/v1/app/identity/iracing` | `{}`; PKCE OAuth redirect, state cookie |
-| POST `/api/v1/app/identity/steam` | `{}`; Steam OpenID redirect, state cookie |
-| POST `/api/v1/app/identity/discord` | `{}`; verified Discord identity from Supabase provider identities |
-| GET `/api/v1/identity/iracing/callback` | Registered provider redirect; state-bound one-use callback |
-| GET `/api/v1/identity/steam/callback` | Steam signed OpenID assertion, server-side verification |
-| GET `/api/v1/app/catalog` | Approved active packages from the tenant's server catalog |
-| POST `/api/v1/app/checkout` | `{ "order_id":"uuid", "package_id":"pack_bronze_10" }` |
-| POST `/api/v1/stripe/create-checkout` | Authenticated alias for the checkout route above |
-| POST `/api/v1/stripe/webhook` | Raw body and `Stripe-Signature`; session verified directly with Stripe |
-| GET `/api/v1/operations/refund-expired` | `Authorization: Bearer <CRON_SECRET>`; bounded batch of atomic refunds |
-| POST `/api/v1/providers/events` | HMAC signed trusted league/provider event registration |
-| POST `/api/v1/providers/results` | HMAC signed complete normalized provider result |
-| POST `/api/v1/telemetry/settle` | Same normalized provider result contract; legacy reports cannot settle new simulator contracts |
-| POST `/api/v1/challenges/initiate` | Separate Discord broker HMAC; verified Discord actor/opponent, future event, immutable request UUID |
-| POST `/api/v1/challenges/accept` | Separate broker HMAC; server rechecks the invited opponent |
+| Method / path                           | Body / behavior                                                                                                                                       |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET `/healthz`                          | Process liveness only                                                                                                                                 |
+| GET `/api/v1/status`                    | Version and configuration state; does not assert database connectivity                                                                                |
+| GET `/api/v1/app/config`                | Public publishable config and integration activation flags                                                                                            |
+| POST `/api/v1/app/enroll`               | `{ "handle":"Driver_1", "accept_terms":true }`                                                                                                        |
+| GET `/api/v1/app/me`                    | Exact balance strings, locked entries, journal history, identities and external contracts                                                             |
+| GET `/api/v1/app/lobby`                 | Registered upcoming external events and eligible open challenges                                                                                      |
+| POST `/api/v1/app/offers`               | `{ "request_id":"uuid", "event_id":"uuid", "mode":"driver_duel", "token_type":"GC", "entry_fee":"10.00", "selection":null, "target_id":null }`        |
+| POST `/api/v1/app/accept`               | `{ "offer_id":"uuid", "accept_terms":true, "selection":null }`; event match requires a distinct registered selection                                  |
+| POST `/api/v1/app/cancel`               | `{ "offer_id":"uuid" }`; creator only, before acceptance                                                                                              |
+| POST `/api/v1/app/request-result`       | `{ "challenge_id":"uuid" }`; queues validation, takes no winner/laps                                                                                  |
+| POST `/api/v1/app/daily`                | `{}`; journaled GC grant, once per UTC day                                                                                                            |
+| POST `/api/v1/app/pause`                | `{ "hours":24 }`; permitted values 1, 24, 168                                                                                                         |
+| POST `/api/v1/app/identity/iracing`     | `{}`; PKCE OAuth redirect, state cookie                                                                                                               |
+| POST `/api/v1/app/identity/steam`       | `{}`; Steam OpenID redirect, state cookie                                                                                                             |
+| POST `/api/v1/app/identity/discord`     | `{}`; verified Discord identity from Supabase provider identities                                                                                     |
+| GET `/api/v1/identity/iracing/callback` | Registered provider redirect; state-bound one-use callback                                                                                            |
+| GET `/api/v1/identity/steam/callback`   | Steam signed OpenID assertion, server-side verification                                                                                               |
+| GET `/api/v1/app/catalog`               | Approved active packages from the tenant's server catalog                                                                                             |
+| POST `/api/v1/app/checkout`             | `{ "order_id":"uuid", "package_id":"pack_bronze_10" }`                                                                                                |
+| POST `/api/v1/stripe/create-checkout`   | Authenticated alias for the checkout route above                                                                                                      |
+| POST `/api/v1/stripe/webhook`           | Raw body and `Stripe-Signature`; session verified directly with Stripe                                                                                |
+| GET `/api/v1/operations/refund-expired` | `Authorization: Bearer <CRON_SECRET>`; bounded batch of atomic refunds                                                                                |
+| POST `/api/v1/providers/events`         | HMAC signed trusted league/provider event registration                                                                                                |
+| POST `/api/v1/providers/results`        | HMAC signed complete normalized provider result                                                                                                       |
+| POST `/api/v1/telemetry/settle`         | Same normalized provider result contract; legacy reports cannot settle new simulator contracts                                                        |
+| POST `/api/v1/challenges/initiate`      | Separate Discord broker HMAC; verified Discord actor/opponent, future event, immutable request UUID                                                   |
+| POST `/api/v1/challenges/accept`        | Separate broker HMAC; server rechecks the invited opponent                                                                                            |
+| POST `/api/v1/challenges/lock-escrow`   | Broker HMAC; `{ "actor_discord_id":"verified Discord ID", "challenge_id":"offer UUID" }`; same atomic acceptance, returns receipt plus `success:true` |
 
 ## Provider authentication
 
 `X-Telemetry-Key-Id`, `X-Telemetry-Timestamp` (10-digit epoch seconds), and `X-Telemetry-Signature` (lowercase hex HMAC-SHA256) authenticate exact uncompressed UTF-8 JSON bytes. The signed message is `POST\n<exact path>\n<key ID>\n<timestamp>\n<body bytes>`. Signature age is limited to five minutes. Never reserialize a body after signing. Provider identities come from `TELEMETRY_KEYS_JSON`. Discord uses `DISCORD_BROKER_KEYS_JSON`, separately provisioned. Refresh the timestamp/signature on retry; preserve the immutable body/source ID.
 
 Use `signBody` in `src/signature.js`. The default path is `/api/v1/telemetry/settle`; supply the fifth argument for other routes. Webhook HTTP authentication and database event/source uniqueness are separate replay defenses.
+
+The Discord acceptance button signs `/api/v1/challenges/lock-escrow` and sends the actual interacting opponent's ID. The `challenge_id` is the immutable offer UUID carried by the invitation; funding creates the challenge under that same UUID. The database resolves the verified Discord identity, rechecks the targeted opponent and funding terms, and atomically locks both entries. Repeating either acceptance path returns the original challenge receipt without another debit. A body with only a challenge ID cannot authorize funding. The `X-System-Token-Sign` shared-secret header is not accepted as a substitute for the broker HMAC.
 
 ## Event registration fields
 
@@ -55,8 +58,19 @@ Use `signBody` in `src/signature.js`. The default path is `/api/v1/telemetry/set
   "final": true,
   "race_status": "completed",
   "drivers": [
-    {"external_id":"123","finish_position":1,"laps":[{"is_clean":true,"lap_time_seconds":"60.000001"},{"is_clean":false,"lap_time_seconds":"1"}]},
-    {"external_id":"456","finish_position":2,"laps":[{"is_clean":true,"lap_time_seconds":"62.000001"}]}
+    {
+      "external_id": "123",
+      "finish_position": 1,
+      "laps": [
+        { "is_clean": true, "lap_time_seconds": "60.000001" },
+        { "is_clean": false, "lap_time_seconds": "1" }
+      ]
+    },
+    {
+      "external_id": "456",
+      "finish_position": 2,
+      "laps": [{ "is_clean": true, "lap_time_seconds": "62.000001" }]
+    }
   ]
 }
 ```
@@ -69,17 +83,17 @@ Success returns the durable SQL receipt. A 503 means the request was not confirm
 
 ## Institutional routes
 
-| Method / path | Contract |
-|---|---|
-| GET `/api/v1/app/program` | Public published current rules, or `{ "program":null }` |
-| GET `/api/v1/app/compliance` | Own current eligibility, consent, remaining quota and recent AME receipts |
-| GET `/api/v1/app/audit` | Own confirmed wallet journal sequence/hash checkpoint |
-| POST `/api/v1/app/compliance/consent` | `{ "program_id":"uuid", "accept_terms":true }` |
-| POST `/api/v1/app/ame` | `{ "request_id":"uuid", "program_id":"uuid" }`; stable retry, no checkout dependency |
-| POST `/api/v1/compliance/receipts` | Trusted signed evidence; exact fields in `COMPLIANCE.md` |
-| POST `/api/v1/compliance/programs/publish` | Operator signed immutable program; full Zod schema in `src/compliance.js` |
+| Method / path                               | Contract                                                                                                                   |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| GET `/api/v1/app/program`                   | Public published current rules, or `{ "program":null }`                                                                    |
+| GET `/api/v1/app/compliance`                | Own current eligibility, consent, remaining quota and recent AME receipts                                                  |
+| GET `/api/v1/app/audit`                     | Own confirmed wallet journal sequence/hash checkpoint                                                                      |
+| POST `/api/v1/app/compliance/consent`       | `{ "program_id":"uuid", "accept_terms":true }`                                                                             |
+| POST `/api/v1/app/ame`                      | `{ "request_id":"uuid", "program_id":"uuid" }`; stable retry, no checkout dependency                                       |
+| POST `/api/v1/compliance/receipts`          | Trusted signed evidence; exact fields in `COMPLIANCE.md`                                                                   |
+| POST `/api/v1/compliance/programs/publish`  | Operator signed immutable program; full Zod schema in `src/compliance.js`                                                  |
 | POST `/api/v1/compliance/programs/activate` | `{ "change_id":"uuid", "program_id":"uuid", "enabled":true, "authorization_reference":"record reference" }`; operator only |
-| POST `/api/v1/compliance/reviews/resolve` | `{ "case_id":"uuid", "reason":"recorded review reason" }`; operator only |
+| POST `/api/v1/compliance/reviews/resolve`   | `{ "case_id":"uuid", "reason":"recorded review reason" }`; operator only                                                   |
 
 Signed routes use the existing raw-body HMAC protocol, including exact route path. Verification and operator keys are separate from telemetry and Discord keys. Retry the original immutable body and identifier after an unknown commit. REST admission failures return 429 with `Retry-After`; SQL financial guards also protect direct authenticated RPC calls.
 

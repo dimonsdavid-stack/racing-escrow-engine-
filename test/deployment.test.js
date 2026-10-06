@@ -47,6 +47,25 @@ test("missing or invalid server configuration leaves health online and settlemen
       assert.deepEqual(await denied.json(), {
         error: "service_not_configured",
       });
+      for (const path of [
+        "/api/v1/app/enroll",
+        "/api/v1/challenges/initiate",
+        "/api/v1/challenges/accept",
+        "/api/v1/challenges/lock-escrow",
+        "/api/v1/stripe/create-checkout",
+      ]) {
+        assert.equal(
+          (
+            await fetch(origin + path, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: "{}",
+            })
+          ).status,
+          503,
+          `${path} must be routed even before activation`,
+        );
+      }
       const serialized = JSON.stringify(status);
       assert.ok(
         !serialized.includes("supabase.co") &&

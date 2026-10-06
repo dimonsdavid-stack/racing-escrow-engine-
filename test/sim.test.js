@@ -16,6 +16,8 @@ import {
 import { encrypt, decrypt, hashPKCE } from "../src/oauth.js";
 import { createCommerceRouter } from "../src/commerce.js";
 import { handleInteraction, interactionUUID } from "../discord/bot.js";
+import { createProviderRouter } from "../src/provider-routes.js";
+import { signBody } from "../src/signature.js";
 import express from "express";
 const E = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 export async function simDatabase() {
@@ -557,6 +559,221 @@ test("Discord accept rejects a different player before any backend request and k
   assert.equal(calls, 0);
   assert.match(reply, /Only the invited/);
   assert.equal(interactionUUID("123"), interactionUUID("123"));
+});
+
+test("Discord invitation and lock-escrow bind the opponent, signing path and one atomic funding receipt", async () => {
+  const { db, a, b } = await simDatabase();
+  const challenger = "123456789012345678",
+    opponent = "987654321098765432",
+    keyId = "discord-broker",
+    secret = randomBytes(32),
+    telemetrySecret = randomBytes(32),
+    requestId = randomUUID();
+  let server;
+  const calls = [];
+  try {
+    await rpc(db, "sim_link_identity", [T, A, "discord", challenger]);
+    await rpc(db, "sim_link_identity", [T, B, "discord", opponent]);
+    const parameters = {
+      sim_discord_offer: [
+        "p_tenant_id",
+        "p_actor_discord",
+        "p_opponent_discord",
+        "p_request_id",
+        "p_event_id",
+        "p_token_type",
+        "p_entry_fee",
+      ],
+      sim_discord_accept: ["p_tenant_id", "p_actor_discord", "p_offer_id"],
+    };
+    const client = {
+      rpc(name, args) {
+        assert.ok(parameters[name], "only expected service RPCs may execute");
+        calls.push({ name, args });
+        return {
+          async abortSignal() {
+            try {
+              await db.exec("SET ROLE service_role");
+              return {
+                data: await rpc(
+                  db,
+                  name,
+                  parameters[name].map((key) => args[key]),
+                ),
+                error: null,
+                status: 200,
+              };
+            } catch (error) {
+              return { data: null, error: { code: error.code }, status: 400 };
+            } finally {
+              await db.exec("RESET ROLE");
+            }
+          },
+        };
+      },
+    };
+    const app = express();
+    app.use(
+      createProviderRouter({
+        client,
+        brokerKeys: new Map([[keyId, { tenantId: T, providerId: P, secret }]]),
+        keys: new Map([
+          [
+            "race-source",
+            { tenantId: T, providerId: P, secret: telemetrySecret },
+          ],
+        ]),
+      }),
+    );
+    server = app.listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    async function send(path, body, options = {}) {
+      const raw = Buffer.from(JSON.stringify(body));
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      return fetch(origin + path, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Telemetry-Key-Id": options.keyId ?? keyId,
+          "X-Telemetry-Timestamp": timestamp,
+          "X-Telemetry-Signature": signBody(
+            options.secret ?? secret,
+            options.keyId ?? keyId,
+            timestamp,
+            raw,
+            options.signedPath ?? path,
+          ),
+        },
+        body: raw,
+      });
+    }
+    const invitation = await send("/api/v1/challenges/initiate", {
+      actor_discord_id: challenger,
+      opponent_discord_id: opponent,
+      request_id: requestId,
+      event_id: E,
+      token_type: "GC",
+      entry_fee: "10.00",
+    });
+    assert.equal(invitation.status, 200);
+    assert.equal((await invitation.json()).offer_id, requestId);
+    const path = "/api/v1/challenges/lock-escrow";
+    const body = { actor_discord_id: opponent, challenge_id: requestId };
+    const beforeInvalid = calls.length;
+    assert.equal(
+      (await send(path, body, { signedPath: "/api/v1/challenges/accept" }))
+        .status,
+      401,
+    );
+    assert.equal(
+      (
+        await send(path, body, {
+          keyId: "race-source",
+          secret: telemetrySecret,
+        })
+      ).status,
+      401,
+    );
+    assert.equal((await send(path, { challenge_id: requestId })).status, 422);
+    assert.equal(
+      (
+        await fetch(origin + path, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-System-Token-Sign": "old-shared-token",
+          },
+          body: JSON.stringify(body),
+        })
+      ).status,
+      401,
+    );
+    assert.equal(calls.length, beforeInvalid);
+    assert.equal(
+      (await send(path, { ...body, actor_discord_id: challenger })).status,
+      403,
+    );
+    assert.equal(
+      (await db.query("SELECT count(*)::int AS n FROM race_private.challenges"))
+        .rows[0].n,
+      0,
+    );
+    let reply, receipt;
+    await handleInteraction(
+      {
+        isButton: () => true,
+        customId: `accept_${requestId}_${opponent}`,
+        user: { id: opponent },
+        deferReply: async () => {},
+        editReply: async (text) => {
+          reply = text;
+        },
+      },
+      {},
+      async (actualPath, actualBody) => {
+        assert.equal(actualPath, path);
+        assert.deepEqual(actualBody, body);
+        const response = await send(actualPath, actualBody);
+        assert.equal(response.status, 200);
+        receipt = await response.json();
+        return receipt;
+      },
+    );
+    assert.equal(receipt.success, true);
+    assert.equal(receipt.challenge_id, requestId);
+    assert.match(reply, /Both entries are held in escrow/);
+    const journalCount = (
+      await db.query(
+        "SELECT count(*)::int AS n FROM race_private.journal_transactions",
+      )
+    ).rows[0].n;
+    const replay = await send(path, body);
+    assert.equal(replay.status, 200);
+    assert.equal((await replay.json()).duplicate, true);
+    const retainedRoute = await send("/api/v1/challenges/accept", {
+      actor_discord_id: opponent,
+      offer_id: requestId,
+    });
+    assert.equal(retainedRoute.status, 200);
+    assert.equal((await retainedRoute.json()).duplicate, true);
+    assert.equal(
+      (
+        await db.query(
+          "SELECT count(*)::int AS n FROM race_private.journal_transactions",
+        )
+      ).rows[0].n,
+      journalCount,
+    );
+    const balances = await db.query(
+      "SELECT id,gc_balance::text AS amount FROM race_private.users WHERE id IN ($1,$2) ORDER BY id",
+      [a, b],
+    );
+    assert.deepEqual(
+      balances.rows.map((row) => row.amount),
+      ["990.000000", "990.000000"],
+    );
+    assert.equal(
+      (
+        await db.query(
+          "SELECT remaining_escrow::text AS amount FROM race_private.challenges WHERE id=$1",
+          [requestId],
+        )
+      ).rows[0].amount,
+      "20.000000",
+    );
+    assert.equal(
+      (
+        await db.query(
+          "SELECT sum(delta)::text AS amount FROM race_private.journal_lines",
+        )
+      ).rows[0].amount,
+      "0.000000",
+    );
+  } finally {
+    if (server) await new Promise((resolve) => server.close(resolve));
+    await db.close();
+  }
 });
 
 test("trusted ACC bridge submits source-file-bound reports and never accepts a mismatched session log", async () => {

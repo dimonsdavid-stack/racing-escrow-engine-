@@ -102,6 +102,13 @@ export function createProviderRouter({
       }),
     brokerKeys,
   );
+  function acceptChallenge(identity, actorDiscordId, offerId) {
+    return callRpc(client, "sim_discord_accept", {
+      p_tenant_id: identity.tenantId,
+      p_actor_discord: actorDiscordId,
+      p_offer_id: offerId,
+    });
+  }
   route(
     "/api/v1/challenges/accept",
     z
@@ -110,12 +117,21 @@ export function createProviderRouter({
         offer_id: z.uuid(),
       })
       .strict(),
-    (i, d) =>
-      callRpc(client, "sim_discord_accept", {
-        p_tenant_id: i.tenantId,
-        p_actor_discord: d.actor_discord_id,
-        p_offer_id: d.offer_id,
-      }),
+    (i, d) => acceptChallenge(i, d.actor_discord_id, d.offer_id),
+    brokerKeys,
+  );
+  route(
+    "/api/v1/challenges/lock-escrow",
+    z
+      .object({
+        actor_discord_id: z.string().regex(/^\d{17,20}$/),
+        challenge_id: z.uuid(),
+      })
+      .strict(),
+    async (i, d) => ({
+      ...(await acceptChallenge(i, d.actor_discord_id, d.challenge_id)),
+      success: true,
+    }),
     brokerKeys,
   );
   return r;

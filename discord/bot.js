@@ -108,8 +108,8 @@ export async function handleInteraction(
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const result = await post(
-        "/api/v1/challenges/accept",
-        { actor_discord_id: i.user.id, offer_id: m[1] },
+        "/api/v1/challenges/lock-escrow",
+        { actor_discord_id: i.user.id, challenge_id: m[1] },
         env,
       );
       await i.editReply(
