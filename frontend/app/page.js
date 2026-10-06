@@ -1429,13 +1429,20 @@ export default function Dashboard() {
           )}
           <footer>
             <span>
-              © {new Date().getFullYear()} GridStake · Racing Escrow Engine
+              © {new Date().getFullYear()} Crestside Consultants L.L.C. ·
+              GridStake
             </span>
             <div>
               <button onClick={() => setModal("rules")}>Challenge rules</button>
               <button onClick={() => setModal("privacy")}>Privacy</button>
+              <a href="/operator.html">Operator disclosure</a>
               <a href="#settings">Play controls</a>
             </div>
+            <p>
+              Operated by Crestside Consultants L.L.C., a California limited
+              liability company. Mailing address: 626 Wilshire Blvd, Suite 410,
+              Los Angeles, CA 90017.
+            </p>
             <p>
               Independent P2P platform. iRacing and Assetto Corsa Competizione
               are external simulators; no affiliation is implied. Availability
@@ -1995,6 +2002,15 @@ export default function Dashboard() {
               <>
                 <h2 id="dialog-title">Challenge operating rules.</h2>
                 <p>
+                  GridStake is operated by Crestside Consultants L.L.C., a
+                  California limited liability company. See the{" "}
+                  <a href="/operator.html">operator disclosure</a> and{" "}
+                  <a href="/sweepstakes-rules.html">
+                    program publication status
+                  </a>
+                  .
+                </p>
+                <p>
                   Race in the external simulator’s registered event. Both
                   players accept a fixed entry, currency, rule, and distinct
                   driver selections before funding closes.
@@ -2092,6 +2108,12 @@ export default function Dashboard() {
             {modal === "privacy" && (
               <>
                 <h2 id="dialog-title">Data used by the app.</h2>
+                <p>
+                  Crestside Consultants L.L.C. operates GridStake. Written
+                  privacy inquiries may be addressed to Crestside Consultants
+                  L.L.C., Attn: GridStake Privacy, 626 Wilshire Blvd, Suite 410,
+                  Los Angeles, CA 90017.
+                </p>
                 <p>
                   When accounts are activated, the platform uses verified
                   account identities, provider customer IDs, accepted challenge

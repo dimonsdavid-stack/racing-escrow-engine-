@@ -14,5 +14,10 @@ await writeFile(
 );
 
 await mkdir("frontend/public", { recursive: true });
-for (const f of ["sweepstakes-rules.html", "rules.css", "rules.js"])
+for (const f of [
+  "sweepstakes-rules.html",
+  "operator.html",
+  "rules.css",
+  "rules.js",
+])
   await copyFile("public/" + f, "frontend/public/" + f);

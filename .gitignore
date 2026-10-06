@@ -15,5 +15,6 @@ frontend/out/
 
 # Generated from authoritative public rules sources by the build.
 frontend/public/sweepstakes-rules.html
+frontend/public/operator.html
 frontend/public/rules.css
 frontend/public/rules.js

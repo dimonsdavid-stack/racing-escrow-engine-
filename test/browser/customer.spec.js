@@ -524,7 +524,7 @@ test("cash redemption retries the persisted request across reload and shows only
     fullPage: true,
   });
 });
-test("public program rules disclose publication status and keep the unverified postal address inactive", async ({
+test("public program rules identify the operator and keep postal entry separate from business correspondence", async ({
   page,
 }, info) => {
   await page.goto("/sweepstakes-rules.html");
@@ -536,7 +536,14 @@ test("public program rules disclose publication status and keep the unverified p
   await expect(page.locator("#program-status")).toContainText(
     "No active operator promotion",
   );
-  await expect(page.locator("#entry")).toContainText("Do not send mail");
+  await expect(page.locator("#operator")).toContainText(
+    "Crestside Consultants L.L.C.",
+  );
+  await expect(page.locator("#operator")).toContainText("202359412578");
+  await expect(page.locator("#entry")).toContainText(
+    "No postal entry program is currently active",
+  );
+  await expect(page.locator("body")).not.toContainText("100 Production Way");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -546,4 +553,21 @@ test("public program rules disclose publication status and keep the unverified p
     path: info.outputPath("program-rules.png"),
     fullPage: true,
   });
+  await page
+    .getByRole("link", { name: "Read the operator disclosure" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Operator disclosure." }),
+  ).toBeVisible();
+  await expect(page.locator("body")).toContainText(
+    "626 Wilshire Blvd, Suite 410",
+  );
+  await expect(page.locator("body")).toContainText(
+    "GC purchases are in-app purchases",
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });
