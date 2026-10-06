@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import ProgramPanel from "./ProgramPanel.js";
+import { PUBLISHED_PACKAGES } from "../../src/catalog.js";
 const NAV = [
   ["lobby", "Challenge lobby", "grid"],
   ["events", "Race calendar", "flag"],
@@ -80,7 +82,11 @@ export default function Dashboard() {
     [session, setSession] = useState(null),
     [me, setMe] = useState(null),
     [lobby, setLobby] = useState(initial),
-    [catalog, setCatalog] = useState([]),
+    [catalog, setCatalog] = useState(PUBLISHED_PACKAGES),
+    [program, setProgram] = useState(null),
+    [compliance, setCompliance] = useState(null),
+    [audit, setAudit] = useState(null),
+    [liveUpdates, setLiveUpdates] = useState(false),
     [search, setSearch] = useState(""),
     [game, setGame] = useState("all"),
     [currency, setCurrency] = useState("GC"),
@@ -94,6 +100,7 @@ export default function Dashboard() {
   const auth = useRef(null),
     token = useRef(null),
     orderIds = useRef({}),
+    freeEntryIds = useRef({}),
     request = useRef(null),
     mounted = useRef(true),
     epoch = useRef(0);
@@ -133,11 +140,19 @@ export default function Dashboard() {
     }
     try {
       const state = await api("me");
-      const [l, c] = await Promise.all([api("lobby"), api("catalog")]);
+      const [l, c, eligibility, checkpoint] = await Promise.all([
+        api("lobby"),
+        api("catalog"),
+        api("compliance"),
+        api("audit"),
+      ]);
       if (!mounted.current || generation !== epoch.current) return;
       setMe(state);
       setLobby(l);
-      setCatalog(c.packages ?? []);
+      setCatalog(c.packages?.length ? c.packages : PUBLISHED_PACKAGES);
+      setCompliance(eligibility);
+      setAudit(checkpoint);
+      setProgram(eligibility.program ?? null);
       setNeedsProfile(false);
       setError(null);
     } catch (e) {
@@ -163,11 +178,19 @@ export default function Dashboard() {
     };
     onHash();
     addEventListener("hashchange", onHash);
-    fetch("/api/v1/app/config")
-      .then((r) => r.json())
-      .then(async (c) => {
+    Promise.all([
+      fetch("/api/v1/app/config").then((r) => {
+        if (!r.ok) throw new Error("configuration_unavailable");
+        return r.json();
+      }),
+      fetch("/api/v1/app/program")
+        .then((r) => (r.ok ? r.json() : { program: null }))
+        .catch(() => ({ program: null })),
+    ])
+      .then(async ([c, p]) => {
         if (!mounted.current) return;
         setConfig(c);
+        setProgram(p.program);
         if (!c.accounts_available) {
           setLoading(false);
           return;
@@ -193,7 +216,10 @@ export default function Dashboard() {
             epoch.current++;
             setMe(null);
             setLobby(initial);
-            setCatalog([]);
+            setCatalog(PUBLISHED_PACKAGES);
+            setCompliance(null);
+            setAudit(null);
+            freeEntryIds.current = {};
           }
         }).data.subscription;
       })
@@ -212,11 +238,62 @@ export default function Dashboard() {
   useEffect(() => {
     if (!session) return;
     refresh();
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") refresh();
-    }, 15000);
+    const timer = setInterval(
+      () => {
+        if (document.visibilityState === "visible") refresh();
+      },
+      liveUpdates ? 90000 : 30000,
+    );
     return () => clearInterval(timer);
-  }, [session, refresh]);
+  }, [session, refresh, liveUpdates]);
+  useEffect(() => {
+    if (!session || !config?.realtime_available || !auth.current) return;
+    let cancelled = false,
+      channel,
+      timer;
+    const client = auth.current,
+      userId = session.user.id;
+    async function updateWallet() {
+      if (document.visibilityState !== "visible" || cancelled) return;
+      try {
+        const [state, checkpoint] = await Promise.all([
+          api("me"),
+          api("audit"),
+        ]);
+        if (!cancelled && mounted.current && auth.current === client) {
+          setMe(state);
+          setAudit(checkpoint);
+        }
+      } catch {
+        if (!cancelled) setLiveUpdates(false);
+      }
+    }
+    client.realtime
+      .setAuth(token.current)
+      .then(() => {
+        if (cancelled) return;
+        channel = client
+          .channel(`gridstake-wallet:${config.tenant_id}:${userId}`, {
+            config: { private: true },
+          })
+          .on("broadcast", { event: "wallet_changed" }, () => {
+            clearTimeout(timer);
+            timer = setTimeout(updateWallet, 500);
+          })
+          .subscribe((status) => {
+            if (!cancelled) setLiveUpdates(status === "SUBSCRIBED");
+          });
+      })
+      .catch(() => {
+        if (!cancelled) setLiveUpdates(false);
+      });
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      setLiveUpdates(false);
+      if (channel) client.removeChannel(channel);
+    };
+  }, [session, config, api]);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 7000);
@@ -262,13 +339,15 @@ export default function Dashboard() {
       await fn();
     } catch (e) {
       notice(
-        e.status === 503
-          ? "The action was not confirmed. Retry the same request; funds stay protected in escrow."
-          : e.status === 403
-            ? "This action requires an eligible account and an open event."
-            : e.status === 409
-              ? "The account or challenge state changed. Refresh and check the confirmed status."
-              : "The request could not be confirmed. Check your connection and try again.",
+        e.status === 429
+          ? "Too many requests. Wait a minute before retrying the same request."
+          : e.status === 503
+            ? "The action was not confirmed. Retry the same request; funds stay protected in escrow."
+            : e.status === 403
+              ? "This action requires an eligible account and an open event."
+              : e.status === 409
+                ? "The account or challenge state changed. Refresh and check the confirmed status."
+                : "The request could not be confirmed. Check your connection and try again.",
       );
     } finally {
       setBusy(false);
@@ -350,7 +429,7 @@ export default function Dashboard() {
   }
   const signedIn = Boolean(session && me);
   return (
-    <div className="shell">
+    <div className="shell min-h-screen selection:bg-lime-300 selection:text-neutral-950">
       <a className="skip" href="#content">
         Skip to content
       </a>
@@ -1043,6 +1122,14 @@ export default function Dashboard() {
                   Purchases become available only when the operator’s approved
                   payment program is active. GC and SC remain separate balances.
                 </p>
+                <div className="mb-5 rounded-xl border border-lime-300/30 bg-lime-300/5 p-4 text-sm text-neutral-100">
+                  <strong>No purchase necessary.</strong> Free promotional entry
+                  is independent of checkout. Purchases do not improve a race
+                  result.{" "}
+                  <a className="text-button" href="#help">
+                    View official rules & free entry ↗
+                  </a>
+                </div>
                 {catalog.length ? (
                   <div className="pack-grid">
                     {catalog.map((p, i) => (
@@ -1067,7 +1154,11 @@ export default function Dashboard() {
                         </div>
                         <button
                           className="primary"
-                          disabled={!config?.commerce_available || busy}
+                          disabled={
+                            !config?.commerce_available ||
+                            p.available === false ||
+                            busy
+                          }
                           onClick={() =>
                             act(async () => {
                               if (!requireAccount()) return;
@@ -1086,7 +1177,10 @@ export default function Dashboard() {
                             })
                           }
                         >
-                          Buy Gold Coins <Icon name="arrow" size={16} />
+                          {p.available === false
+                            ? "Not activated"
+                            : "Buy Gold Coins"}{" "}
+                          <Icon name="arrow" size={16} />
                         </button>
                       </article>
                     ))}
@@ -1258,38 +1352,79 @@ export default function Dashboard() {
             </section>
           )}
           {section === "help" && (
-            <section className="panel help">
-              <h2>How a challenge settles</h2>
-              <div className="help-grid">
-                {[
-                  [
-                    "Fixed terms before funding",
-                    "Both players agree on a scheduled event, currency, entry, rule, and two distinct verified driver selections. Acceptance locks both entries in one database transaction.",
-                  ],
-                  [
-                    "Authoritative race evidence",
-                    "You race in iRacing or ACC. The web app does not simulate a race. A configured provider fetches official results or signs the ACC server report. Browser lap submissions cannot determine payouts.",
-                  ],
-                  [
-                    "Winner, tie, or full refund",
-                    "The lowest valid clean lap wins a lap duel. Event matchups compare agreed finish positions. The winner receives 90% of both entries. Ties, both drivers having no valid result, signed disconnects, or validation deadlines refund both entries without a fee.",
-                  ],
-                  [
-                    "Separate currencies",
-                    "GC are non-redeemable utility coins. SC are promotional assets with separate eligibility and redemption rules. The app does not automatically make a paid competition a legally approved sweepstakes.",
-                  ],
-                ].map(([t, d]) => (
-                  <article key={t}>
-                    <Icon name="shield" />
-                    <h3>{t}</h3>
-                    <p>{d}</p>
-                  </article>
-                ))}
-              </div>
-              <button className="secondary" onClick={() => setModal("status")}>
-                View integration status
-              </button>
-            </section>
+            <>
+              <section className="panel help">
+                <h2>How a challenge settles</h2>
+                <div className="help-grid">
+                  {[
+                    [
+                      "Fixed terms before funding",
+                      "Both players agree on a scheduled event, currency, entry, rule, and two distinct verified driver selections. Acceptance locks both entries in one database transaction.",
+                    ],
+                    [
+                      "Authoritative race evidence",
+                      "You race in iRacing or ACC. The web app does not simulate a race. A configured provider fetches official results or signs the ACC server report. Browser lap submissions cannot determine payouts.",
+                    ],
+                    [
+                      "Winner, tie, or full refund",
+                      "The lowest valid clean lap wins a lap duel. Event matchups compare agreed finish positions. The winner receives 90% of both entries. Ties, both drivers having no valid result, signed disconnects, or validation deadlines refund both entries without a fee.",
+                    ],
+                    [
+                      "Separate currencies",
+                      "GC are non-redeemable utility coins. SC are promotional assets with separate eligibility and redemption rules. The app does not automatically make a paid competition a legally approved sweepstakes.",
+                    ],
+                  ].map(([t, d]) => (
+                    <article key={t}>
+                      <Icon name="shield" />
+                      <h3>{t}</h3>
+                      <p>{d}</p>
+                    </article>
+                  ))}
+                </div>
+                <button
+                  className="secondary"
+                  onClick={() => setModal("status")}
+                >
+                  View integration status
+                </button>
+              </section>
+              <ProgramPanel
+                program={program}
+                compliance={compliance}
+                audit={audit}
+                signedIn={signedIn}
+                busy={busy}
+                onSignIn={() => setModal("signin")}
+                onConsent={(programId) =>
+                  act(async () => {
+                    await api("compliance/consent", {
+                      program_id: programId,
+                      accept_terms: true,
+                    });
+                    await refresh();
+                    notice("Official rules acceptance recorded.");
+                  })
+                }
+                onClaim={(programId) =>
+                  act(async () => {
+                    if (!requireAccount()) return;
+                    freeEntryIds.current[programId] ??= crypto.randomUUID();
+                    const r = await api("ame", {
+                      request_id: freeEntryIds.current[programId],
+                      program_id: programId,
+                    });
+                    if (r.state === "Credited" || r.state === "Rejected")
+                      delete freeEntryIds.current[programId];
+                    await refresh();
+                    notice(
+                      r.state === "Credited"
+                        ? `Free entry confirmed: ${coin(r.amount)} SC. Receipt ${r.id}.`
+                        : `Free entry recorded without a credit: ${String(r.reason).replaceAll("_", " ")}.`,
+                    );
+                  })
+                }
+              />
+            </>
           )}
           <footer>
             <span>

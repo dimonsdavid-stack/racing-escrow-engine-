@@ -51,3 +51,11 @@ Durable job leases use `FOR UPDATE SKIP LOCKED`; interrupted leases expire. Run 
 ## Operational limits
 
 This release has not been load-tested with 200,000 simultaneous or registered platform users. The user's cited iRacing population is an external audience, not a verified platform metric. No absolute availability guarantee follows from ACID transactions. Transactional guarantees rely on PostgreSQL's durability configuration, correct operational credentials, and trusted source integrations. Region eligibility, official sweepstakes rules, provider commercial authorization, dispute operations, and redemption require operator activation and verification beyond source deployment.
+
+## Institutional enforcement
+
+Migration 4 renames the isolated currency enum to `currency_type`, adds explicit `Refunded` states, normalized promotion/compliance/risk/AME evidence, exact prize and withheld-rake aliases, admission counters, and tamper-evident journal seals. See `COMPLIANCE.md` for the precise trust and activation boundaries. The gross escrow remains intact until resolution; net `prize_pool` is gross minus the 10% rake reserve. Reserving a rake does not recognize platform revenue before a winning settlement. This is necessary to refund 100% with zero fee.
+
+Wallet locks use canonical `FOR NO KEY UPDATE` ordering because these balance mutations do not alter keys. This provides exclusive balance writes while avoiding foreign-key key-share deadlocks observed with indiscriminate `FOR UPDATE`. Challenges, event terms, evidence and audit heads retain their appropriate locks. RPCs execute within the caller's single PostgreSQL transaction; PL/pgSQL functions cannot open autonomous `BEGIN … COMMIT` transactions. The fresh-install DDL has explicit transaction boundaries. Deadlock/serialization/network retries keep the original mutation identifiers.
+
+The requested public compatibility function names do not expose unrestricted winner/amount choices: acceptance derives the invited participant and source-bound settlement cross-checks stored evidence, token and net amount. Security-definer implementations live in the isolated schema; version 4 public wrappers are security invoker with explicit role grants. Unrelated tenant and public functions retain their own grants.

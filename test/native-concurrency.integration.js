@@ -855,6 +855,224 @@ test("native PostgreSQL concurrent escrow mutations", async (t) => {
         );
       },
     );
+    await t.test(
+      "institutional free-entry retries, sybil review and audit rollback serialize real PostgreSQL connections",
+      async () => {
+        await admin.query(
+          await readFile(
+            new URL(
+              "../supabase/migrations/20261006092644_institutional_controls.sql",
+              import.meta.url,
+            ),
+            "utf8",
+          ),
+        );
+        const provider = (
+          await admin.query(
+            "SELECT id FROM race_private.providers WHERE tenant_id=$1",
+            [T],
+          )
+        ).rows[0].id;
+        const actors = [randomUUID(), randomUUID(), randomUUID()],
+          wallets = [],
+          program = randomUUID();
+        const asActor = async (c, id) => {
+          await c.query("SELECT set_config('request.jwt.claims',$1,false)", [
+            JSON.stringify({ sub: id, session_id: id }),
+          ]);
+          await c.query("SET ROLE authenticated");
+        };
+        const rpc = async (c, name, args) =>
+          (
+            await c.query(
+              "SELECT public." +
+                name +
+                "(" +
+                args.map((_, i) => "$" + (i + 1)).join(",") +
+                ") AS r",
+              args,
+            )
+          ).rows[0].r;
+        await admin.query(
+          "UPDATE race_private.tenants SET customer_signup_enabled=true,sc_enabled=true WHERE id=$1",
+          [T],
+        );
+        for (const [i, id] of actors.entries()) {
+          await admin.query(
+            "INSERT INTO auth.users(id,email_confirmed_at) VALUES($1,now())",
+            [id],
+          );
+          await admin.query("INSERT INTO auth.sessions VALUES($1,$1)", [id]);
+          await asActor(admin, id);
+          wallets.push(
+            (await rpc(admin, "race_enroll", [T, "Institutional_" + i, true]))
+              .user_id,
+          );
+          await admin.query("RESET ROLE;RESET request.jwt.claims");
+        }
+        await rpc(admin, "grid_publish_program", [
+          T,
+          provider,
+          randomUUID(),
+          program,
+          "native-v4",
+          "Native-only rules",
+          "Test-only sponsor",
+          "https://rules.example.test/native",
+          "a".repeat(64),
+          new Date(Date.now() - 3600000).toISOString(),
+          new Date(Date.now() + 86400000).toISOString(),
+          21,
+          ["US-CA"],
+          "1.000000",
+          24,
+          1,
+          "Test-only authorization",
+          "b".repeat(64),
+        ]);
+        await rpc(admin, "grid_activate_program", [
+          T,
+          provider,
+          randomUUID(),
+          program,
+          true,
+          "Test-only activation",
+          "c".repeat(64),
+        ]);
+        const receipt = async (c, id, purpose, subject) =>
+          rpc(c, "grid_record_compliance", [
+            T,
+            provider,
+            randomUUID(),
+            id,
+            purpose,
+            "approved",
+            "test_verified",
+            new Date(Date.now() - 1000).toISOString(),
+            new Date(Date.now() + 120000).toISOString(),
+            subject ?? null,
+            purpose === "identity" ? 21 : null,
+            purpose === "location" ? "US-CA" : null,
+            false,
+            "d".repeat(64),
+          ]);
+        await receipt(admin, actors[0], "identity", "e".repeat(64));
+        await receipt(admin, actors[0], "location");
+        await asActor(admin, actors[0]);
+        await rpc(admin, "grid_consent", [T, program]);
+        await admin.query("RESET ROLE;RESET request.jwt.claims");
+        const request = randomUUID();
+        const claims = await concurrent(
+          Array.from({ length: 8 }, () => async (c) => {
+            await asActor(c, actors[0]);
+            try {
+              return await rpc(c, "grid_ame", [T, request, program]);
+            } finally {
+              await c.query("RESET ROLE;RESET request.jwt.claims");
+            }
+          }),
+        );
+        assert.equal(claims.filter((r) => r.status === "fulfilled").length, 8);
+        assert.equal(
+          claims.filter((r) => r.value.duplicate === false).length,
+          1,
+        );
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT sc_balance::text AS n FROM race_private.users WHERE id=$1",
+              [wallets[0]],
+            )
+          ).rows[0].n,
+          "1.000000",
+        );
+        const quota = await concurrent(
+          Array.from({ length: 8 }, () => async (c) => {
+            await asActor(c, actors[0]);
+            try {
+              return await rpc(c, "grid_ame", [T, randomUUID(), program]);
+            } finally {
+              await c.query("RESET ROLE;RESET request.jwt.claims");
+            }
+          }),
+        );
+        assert.ok(
+          quota.every(
+            (r) =>
+              r.status === "fulfilled" &&
+              r.value.reason === "period_limit_reached",
+          ),
+        );
+        const identity = await concurrent(
+          [1, 2].map(
+            (i) => (c) => receipt(c, actors[i], "identity", "f".repeat(64)),
+          ),
+        );
+        assert.equal(
+          identity.filter(
+            (r) => r.status === "fulfilled" && r.value.decision === "approved",
+          ).length,
+          1,
+        );
+        assert.equal(
+          identity.filter(
+            (r) => r.status === "fulfilled" && r.value.decision === "review",
+          ).length,
+          1,
+        );
+        const before = (
+          await admin.query(
+            "SELECT gc_balance::text AS n FROM race_private.users WHERE id=$1",
+            [wallets[0]],
+          )
+        ).rows[0].n;
+        await admin.query(
+          "CREATE FUNCTION race_private.audit_failure_native() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RAISE EXCEPTION 'audit_storage_failure_native';END$$;CREATE TRIGGER fail_audit_native BEFORE INSERT ON race_private.audit_records FOR EACH ROW EXECUTE FUNCTION race_private.audit_failure_native();",
+        );
+        await assert.rejects(
+          rpc(admin, "credit_wallet", [
+            T,
+            wallets[0],
+            "GC",
+            "10",
+            "native-audit-failure",
+          ]),
+          /audit_storage_failure_native/,
+        );
+        await admin.query(
+          "DROP TRIGGER fail_audit_native ON race_private.audit_records",
+        );
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT gc_balance::text AS n FROM race_private.users WHERE id=$1",
+              [wallets[0]],
+            )
+          ).rows[0].n,
+          before,
+        );
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT count(*)::int AS n FROM race_private.journal_transactions WHERE external_ref='native-audit-failure'",
+            )
+          ).rows[0].n,
+          0,
+        );
+        const balance = await admin.query(
+          "SELECT sum(delta)::text AS n FROM race_private.journal_lines",
+        );
+        assert.equal(balance.rows[0].n, "0.000000");
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT count(*)::int AS n FROM race_private.journal_transactions j LEFT JOIN race_private.journal_seals s ON(s.tenant_id,s.transaction_id)=(j.tenant_id,j.id) WHERE s.transaction_id IS NULL",
+            )
+          ).rows[0].n,
+          0,
+        );
+      },
+    );
   } finally {
     admin?.release();
     await pool.end();

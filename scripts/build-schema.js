@@ -3,6 +3,7 @@ const files = [
   "sql/001_engine.sql",
   "supabase/migrations/20261005224115_customer_app.sql",
   "supabase/migrations/20261006073056_sim_racing_commerce.sql",
+  "supabase/migrations/20261006092644_institutional_controls.sql",
 ];
 const sources = await Promise.all(files.map((f) => readFile(f, "utf8")));
 await writeFile(

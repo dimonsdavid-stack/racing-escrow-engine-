@@ -4,13 +4,13 @@ A mobile web P2P challenge and validation layer for **external iRacing and ACC s
 
 **Production URL:** https://racing-escrow-engine.vercel.app/
 
-**Current release:** 3.0.0. Publishing the web application does not activate external accounts, payments, simulator access, or cash redemption. Those services require operator credentials and verified program configuration. The UI exposes the actual configured state and never invents wallet balances, races, player counts, or checkout success.
+**Current release:** 4.0.0. Publishing the web application does not activate external accounts, payments, simulator access, or cash redemption. Those services require operator credentials and verified program configuration. The UI exposes the actual configured state and never invents wallet balances, races, player counts, or checkout success.
 
 ## Project files
 
 | File | Purpose |
 |---|---|
-| `supabase/schema.sql` | Generated fresh-install schema; includes three atomic migrations |
+| `supabase/schema.sql` | Generated fresh-install schema; includes the base ledger and three versioned migrations |
 | `sql/001_engine.sql` | Double-entry journal, wallet projection, escrow, settlement and full refunds |
 | `supabase/migrations/20261006073056_sim_racing_commerce.sql` | Verified driver identities, scheduled events, consent, source evidence, durable result jobs, OAuth leases, commerce |
 | `server/app.js`, `server.js` | Shared Express application / Vercel entrypoint |
@@ -27,6 +27,12 @@ A mobile web P2P challenge and validation layer for **external iRacing and ACC s
 | `docs/API.md` | Routes and provider payload contracts |
 | `DEPLOYMENT.md` | Deployment, activation, testing, rollback, and operational procedure |
 | `docs/PROJECT_LINKS.md` | Public domains, repository, source and operator consoles |
+
+## Institutional controls
+
+Version 4 adds immutable promotion versions, signed identity/location/risk receipts, per-tenant person deduplication and review holds, independent journaled free entry, admission budgets, registered lap bounds, and per-wallet tamper-evident audit chains. Private Realtime messages invalidate balances; the browser still reads only confirmed server snapshots. The requested escrow and settlement RPC names are implemented with authorization and source-evidence checks.
+
+See [COMPLIANCE.md](docs/COMPLIANCE.md) for trust limits and [ENVIRONMENT.md](docs/ENVIRONMENT.md) for the complete runtime inventory. Cash redemption and actual verification-provider activation remain external launch work.
 
 ## Local development
 

@@ -48,6 +48,14 @@ test("external sim dashboard navigates without a game or fabricated account data
   expect(errors).toEqual([]);
 });
 async function account(page) {
+  await page.route("**/api/v1/app/compliance", (r) =>
+    r.fulfill({
+      json: { eligible: false, reason: "program_unavailable", requests: [] },
+    }),
+  );
+  await page.route("**/api/v1/app/audit", (r) =>
+    r.fulfill({ json: { sequence: "1", hash: "a".repeat(64) } }),
+  );
   const user = {
     id: A,
     email: "racer@example.test",
@@ -264,4 +272,162 @@ test("new challenge quotes precise micro-value payout and keeps retry identity a
   expect(calls[0].request_id).toBe(calls[1].request_id);
   expect(calls[0].entry_fee).toBe("0.01");
   expect(calls[0].user_id).toBeUndefined();
+});
+
+test("free entry is visible from the shop and does not accept requests before program activation", async ({
+  page,
+}, info) => {
+  await page.goto("/#wallet");
+  await page
+    .getByRole("link", { name: /View official rules & free entry/ })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "No purchase necessary." }),
+  ).toBeVisible();
+  await expect(page.locator("#free-entry")).toContainText(
+    "Sign in without buying coins",
+  );
+  await expect(page.locator("#free-entry")).toContainText("Activation pending");
+  await expect(
+    page.getByRole("button", { name: "Request free Sweeps Coins" }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: info.outputPath("free-entry-inactive.png"),
+    fullPage: true,
+  });
+});
+
+test("free entry records consent, retries the same receipt and displays only confirmed awards", async ({
+  page,
+}, info) => {
+  await account(page);
+  const program = {
+    id: E,
+    version: "Test rules v4",
+    sponsor: "Browser test sponsor",
+    title: "Test-only program",
+    official_rules_url: "https://rules.example.test/official",
+    free_sc: "1.000000",
+    entries_per_period: 1,
+    period_hours: 24,
+    minimum_age: 21,
+    territories: ["US-CA"],
+    starts_at: "2026-10-01T00:00:00Z",
+    ends_at: "2030-01-01T00:00:00Z",
+  };
+  let consent = false,
+    credited = false,
+    attempts = [];
+  await page.route("**/api/v1/app/program", (r) =>
+    r.fulfill({ json: { program } }),
+  );
+  await page.route("**/api/v1/app/me", (r) =>
+    r.fulfill({
+      json: {
+        user_id: A,
+        handle: "Free_Racer",
+        gc_balance: "1000.000000",
+        sc_balance: credited ? "1.000000" : "0.000000",
+        gc_locked_entry: "0.000000",
+        sc_locked_entry: "0.000000",
+        sc_eligible: consent,
+        identities: [],
+        contracts: [],
+        history: [],
+      },
+    }),
+  );
+  await page.route("**/api/v1/app/lobby", (r) =>
+    r.fulfill({ json: { events: [], offers: [], players: [] } }),
+  );
+  await page.route("**/api/v1/app/catalog", (r) => r.fulfill({ json: [] }));
+  await page.route("**/api/v1/app/compliance", (r) =>
+    r.fulfill({
+      json: {
+        eligible: consent,
+        consent_recorded: consent,
+        reason: consent ? "eligible" : "rules_consent_required",
+        entries_remaining: credited ? 0 : 1,
+        next_period_at: "2030-01-02T00:00:00Z",
+        requests: credited
+          ? [
+              {
+                id: attempts[0].request_id,
+                program_id: E,
+                state: "Credited",
+                amount: "1.000000",
+                reason: "free_entry_confirmed",
+                created_at: "2026-10-06T09:00:00Z",
+              },
+            ]
+          : [],
+      },
+    }),
+  );
+  await page.route("**/api/v1/app/compliance/consent", (r) => {
+    expect(r.request().postDataJSON()).toEqual({
+      program_id: E,
+      accept_terms: true,
+    });
+    consent = true;
+    return r.fulfill({ json: { consent_recorded: true } });
+  });
+  await page.route("**/api/v1/app/ame", (r) => {
+    attempts.push(r.request().postDataJSON());
+    if (attempts.length === 1)
+      return r.fulfill({ status: 503, json: { error: "retry_same_request" } });
+    credited = true;
+    return r.fulfill({
+      json: {
+        id: attempts[0].request_id,
+        state: "Credited",
+        amount: "1.000000",
+      },
+    });
+  });
+  await page.goto("/#help");
+  const panel = page.locator("#free-entry");
+  await expect(
+    panel.getByRole("button", { name: "Record rules acceptance" }),
+  ).toBeDisabled();
+  await panel.getByRole("checkbox").check();
+  await panel.getByRole("button", { name: "Record rules acceptance" }).click();
+  await expect(
+    panel.getByRole("button", { name: "Request free Sweeps Coins" }),
+  ).toBeEnabled();
+  await panel
+    .getByRole("button", { name: "Request free Sweeps Coins" })
+    .click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "The action was not confirmed" }),
+  ).toBeVisible();
+  await expect(
+    panel.getByRole("button", { name: "Request free Sweeps Coins" }),
+  ).toBeEnabled();
+  await panel
+    .getByRole("button", { name: "Request free Sweeps Coins" })
+    .click();
+  await expect(
+    panel.getByRole("button", { name: "Request free Sweeps Coins" }),
+  ).toBeDisabled();
+  expect(attempts).toHaveLength(2);
+  expect(attempts[1]).toEqual(attempts[0]);
+  await expect(panel).toContainText("1.000000");
+  await expect(panel).toContainText("Credited");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  const download = page.waitForEvent("download");
+  await panel.getByRole("button", { name: "Export my receipts" }).click();
+  expect((await download).suggestedFilename()).toBe(
+    "gridstake-free-entry-receipts.json",
+  );
+  await page.screenshot({
+    path: info.outputPath("free-entry-confirmed.png"),
+    fullPage: true,
+  });
 });

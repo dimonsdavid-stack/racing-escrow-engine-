@@ -119,7 +119,12 @@ export async function createCheckout(
     {
       mode: "payment",
       client_reference_id: o.id,
-      metadata: { tenant_id: tenant, order_id: o.id },
+      metadata: {
+        tenant_id: tenant,
+        order_id: o.id,
+        user_id: o.user_id,
+        package_id: o.package_id,
+      },
       line_items: [
         {
           price_data: {

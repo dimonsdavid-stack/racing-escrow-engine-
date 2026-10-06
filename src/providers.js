@@ -14,6 +14,14 @@ export const EventRegistration = z
     deadline: z.iso.datetime({ offset: true }),
     rule: z.enum(["fastest_clean_lap", "finish_position"]),
     entrants: z.array(z.string().min(1).max(80)).min(2).max(200),
+    min_lap_seconds: z
+      .string()
+      .regex(/^\d{1,5}(?:\.\d{1,6})?$/)
+      .default("1.000000"),
+    max_lap_seconds: z
+      .string()
+      .regex(/^\d{1,5}(?:\.\d{1,6})?$/)
+      .default("3600.000000"),
   })
   .strict()
   .refine((d) => new Set(d.entrants).size === d.entrants.length);
@@ -44,6 +52,7 @@ export const ProviderReport = z
                 z
                   .object({
                     is_clean: z.boolean(),
+                    flags: z.number().int().min(0).max(4294967295).optional(),
                     lap_time_seconds: z.union([
                       z.string().regex(/^-?\d{1,6}(?:\.\d{1,6})?$/),
                       z.number().finite(),
@@ -80,6 +89,13 @@ export function providerDecision(report, context) {
   )
     throw new Error("provider_binding_mismatch");
   const selections = [context.selection_a, context.selection_b];
+  const minimum = decimalMicros(context.min_lap_seconds ?? "1.000000");
+  const maximum = decimalMicros(context.max_lap_seconds ?? "3600.000000");
+  if (
+    context.rule === "fastest_clean_lap" &&
+    (minimum === null || maximum === null || maximum <= minimum)
+  )
+    throw new Error("invalid_registered_lap_bounds");
   const metrics = selections.map((id) => {
     const d = report.drivers.find((x) => x.external_id === id);
     if (!d && report.race_status !== "network_drop")
@@ -88,9 +104,16 @@ export function providerDecision(report, context) {
       return d?.finish_position ? BigInt(d.finish_position) * 1000000n : null;
     let best = null;
     for (const lap of d?.laps ?? []) {
-      if (lap.is_clean !== true) continue;
+      if (lap.is_clean !== true || (lap.flags !== undefined && lap.flags !== 0))
+        continue;
       const time = decimalMicros(lap.lap_time_seconds);
-      if (time !== null && (best === null || time < best)) best = time;
+      if (
+        time !== null &&
+        time >= minimum &&
+        time <= maximum &&
+        (best === null || time < best)
+      )
+        best = time;
     }
     return best;
   });
@@ -182,13 +205,11 @@ export function normalizeACC(result, binding) {
       !Number.isSafeInteger(lap.lapTime)
     )
       throw new Error("acc_ambiguous_lap");
-    drivers
-      .get(driver.playerId)
-      .laps.push({
-        is_clean: lap.isValidForBest,
-        lap_time_seconds:
-          lap.lapTime > 0 ? microsText(BigInt(lap.lapTime) * 1000n) : "0",
-      });
+    drivers.get(driver.playerId).laps.push({
+      is_clean: lap.isValidForBest,
+      lap_time_seconds:
+        lap.lapTime > 0 ? microsText(BigInt(lap.lapTime) * 1000n) : "0",
+    });
   }
   return ProviderReport.parse({
     ...binding,

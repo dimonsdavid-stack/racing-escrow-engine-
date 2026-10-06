@@ -66,3 +66,23 @@ This is a documented wire example, not a registered live race. Actual challenge/
 Success returns the durable SQL receipt. A 503 means the request was not confirmed; retry the same identity/body or inspect the confirmed state. Do not submit a new payment/order/event identity merely because a response was lost. HTTP 403/409 requires rechecking eligibility and immutable bindings, not automatic resubmission with different terms.
 
 `POST /api/v1/providers/contracts` accepts signed `{ "external_session_id":"registered-session", "after":null }` and returns at most 100 active provider-bound contexts in UUID order. Continue using the last `challenge_id` as `after`. This is a trusted-host integration route; it provides no wallet balance data and accepts no browser session. The ACC bridge uses it to settle multiple independent P2P contracts on the same external race.
+
+## Institutional routes
+
+| Method / path | Contract |
+|---|---|
+| GET `/api/v1/app/program` | Public published current rules, or `{ "program":null }` |
+| GET `/api/v1/app/compliance` | Own current eligibility, consent, remaining quota and recent AME receipts |
+| GET `/api/v1/app/audit` | Own confirmed wallet journal sequence/hash checkpoint |
+| POST `/api/v1/app/compliance/consent` | `{ "program_id":"uuid", "accept_terms":true }` |
+| POST `/api/v1/app/ame` | `{ "request_id":"uuid", "program_id":"uuid" }`; stable retry, no checkout dependency |
+| POST `/api/v1/compliance/receipts` | Trusted signed evidence; exact fields in `COMPLIANCE.md` |
+| POST `/api/v1/compliance/programs/publish` | Operator signed immutable program; full Zod schema in `src/compliance.js` |
+| POST `/api/v1/compliance/programs/activate` | `{ "change_id":"uuid", "program_id":"uuid", "enabled":true, "authorization_reference":"record reference" }`; operator only |
+| POST `/api/v1/compliance/reviews/resolve` | `{ "case_id":"uuid", "reason":"recorded review reason" }`; operator only |
+
+Signed routes use the existing raw-body HMAC protocol, including exact route path. Verification and operator keys are separate from telemetry and Discord keys. Retry the original immutable body and identifier after an unknown commit. REST admission failures return 429 with `Retry-After`; SQL financial guards also protect direct authenticated RPC calls.
+
+Future event registration adds decimal-string `min_lap_seconds` and `max_lap_seconds` (defaults 1 and 3600). The operator must choose plausible bounds for the actual event. Normalized telemetry laps can additionally carry an integer `flags`; any nonzero value is disregarded. Provider-specific session flags are not automatically lap-validity flags.
+
+The compatibility RPC `execute_p2p_escrow(p_challenge_id UUID)` resolves the authenticated invited opponent and tenant rather than accepting a user ID. `commit_challenge_settlement(p_challenge_id UUID,p_winner_id UUID,p_payout_amount NUMERIC,p_token_type TEXT,p_subsession TEXT)` is service-only and checks the supplied terms against authoritative stored evidence. Payout cannot be chosen by a customer or caller-provided amount. Refunds now explicitly use challenge state `Refunded`.

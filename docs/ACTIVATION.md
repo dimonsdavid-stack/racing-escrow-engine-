@@ -8,6 +8,7 @@
 - ACC: normalization and signed provider report route implemented; no trusted dedicated server has been connected in this session.
 - Stripe: paid-session verification and atomic coin fulfillment implemented; checkout remains inactive pending actual merchant authorization and credentials.
 - Discord: persistent bot, registration, HMAC broker, and opponent acceptance implemented; no bot token or activated worker service was supplied.
+- Version 4 controls: program publication, signed verification receipts, deduplication/review, independent free entry, audit export and private notification code implemented. No actual sponsor program, vendor verification bridge, private Realtime platform setting, or external audit anchor is activated.
 - Cash redemption: not implemented/active. Official promotion rules, region/age eligibility, identity verification, redemption partner, and operator workflows require a separate approved launch scope.
 - Audience: no claim of 200,000 platform users or production load certification is made.
 - Database CLI: automatic approval review blocked a Supabase CLI attempt after third-party PostHog telemetry. Local migration files and database tests were completed without retrying that CLI.

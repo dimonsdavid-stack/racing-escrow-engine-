@@ -5,6 +5,7 @@ import { callRpc, RpcError, retryable } from "./settlement.js";
 import { commerceReady, createCheckout } from "./commerce.js";
 import { beginIRacing, oauthReady, hashState, encrypt } from "./oauth.js";
 import { randomBytes } from "node:crypto";
+import { PUBLISHED_PACKAGES } from "./catalog.js";
 export function customerConfig(env = process.env) {
   try {
     const url = new URL(env.SUPABASE_URL),
@@ -101,6 +102,16 @@ const specs = {
     z.object({ challenge_id: z.uuid() }).strict(),
     (d) => ({ p_challenge_id: d.challenge_id }),
   ],
+  "compliance/consent": [
+    "grid_consent",
+    z.object({ program_id: z.uuid(), accept_terms: z.literal(true) }).strict(),
+    (d) => ({ p_program_id: d.program_id }),
+  ],
+  ame: [
+    "grid_ame",
+    z.object({ request_id: z.uuid(), program_id: z.uuid() }).strict(),
+    (d) => ({ p_request_id: d.request_id, p_program_id: d.program_id }),
+  ],
 };
 export function createCustomerRouter({
   env = process.env,
@@ -123,8 +134,20 @@ export function createCustomerRouter({
       ),
       redemption_available: false,
       practice_available: false,
+      package_catalog: PUBLISHED_PACKAGES,
+      realtime_available: env.REALTIME_ENABLED === "true",
     }),
   );
+  r.get("/program", async (_req, res) => {
+    if (!config || !admin) return res.json({ program: null });
+    try {
+      return res.json(
+        await callRpc(admin, "grid_program", { p_tenant_id: config.tenant }),
+      );
+    } catch {
+      return res.status(503).json({ error: "program_rules_unavailable" });
+    }
+  });
   r.use(async (req, res, next) => {
     if (!config)
       return res.status(503).json({ error: "accounts_not_activated" });
@@ -162,22 +185,48 @@ export function createCustomerRouter({
   function reject(res, error) {
     const code = error instanceof RpcError ? error.code : "NETWORK";
     const status =
-      { PT400: 400, PT403: 403, PT404: 404, PT409: 409, 23505: 409 }[code] ??
-      (retryable(new RpcError(code)) ? 503 : 500);
-    return res
-      .status(status)
-      .json({
-        error:
-          status === 409
-            ? "profile_or_challenge_conflict"
-            : status === 403
-              ? "account_or_currency_unavailable"
-              : status === 503
-                ? "retry_same_request"
-                : "request_rejected",
-      });
+      {
+        PT400: 400,
+        PT403: 403,
+        PT404: 404,
+        PT409: 409,
+        PT429: 429,
+        23505: 409,
+      }[code] ?? (retryable(new RpcError(code)) ? 503 : 500);
+    if (status === 429) res.set("Retry-After", "60");
+    return res.status(status).json({
+      error:
+        status === 409
+          ? "profile_or_challenge_conflict"
+          : status === 403
+            ? "account_or_currency_unavailable"
+            : status === 503
+              ? "retry_same_request"
+              : "request_rejected",
+    });
+  }
+  async function budget(req, res, operation) {
+    try {
+      const result = await callRpc(
+        req.customer,
+        "grid_request_budget",
+        { p_tenant_id: config.tenant, p_operation: operation },
+        { attempts: 1 },
+      );
+      if (result.allowed !== true) {
+        res.set("Retry-After", String(Math.max(1, result.retry_after || 60)));
+        res.status(429).json({ error: "request_limit_reached" });
+        return false;
+      }
+      return true;
+    } catch (e) {
+      reject(res, e);
+      return false;
+    }
   }
   async function rpc(req, res, name, args) {
+    if (!(await budget(req, res, req.method === "GET" ? "read" : "mutate")))
+      return;
     try {
       return res.json(
         await callRpc(req.customer, name, {
@@ -192,6 +241,8 @@ export function createCustomerRouter({
   r.get("/me", (req, res) => rpc(req, res, "sim_state", {}));
   r.get("/lobby", (req, res) => rpc(req, res, "sim_lobby", {}));
   r.get("/catalog", (req, res) => rpc(req, res, "sim_catalog", {}));
+  r.get("/compliance", (req, res) => rpc(req, res, "grid_compliance", {}));
+  r.get("/audit", (req, res) => rpc(req, res, "grid_wallet_audit", {}));
   r.use(express.json({ limit: "16kb", strict: true }));
   for (const [path, [name, schema, args]] of Object.entries(specs))
     r.post("/" + path, (req, res) => {
@@ -210,6 +261,7 @@ export function createCustomerRouter({
     if (!d.success) return res.status(422).json({ error: "invalid_request" });
     if (!commerceReady(env))
       return res.status(503).json({ error: "commerce_not_activated" });
+    if (!(await budget(req, res, "checkout"))) return;
     try {
       return res.json(
         await createCheckout(req.customer, config.tenant, d.data, env, stripe),
@@ -223,6 +275,7 @@ export function createCustomerRouter({
       return res.status(503).json({ error: "identity_not_activated" });
     if (Object.keys(req.body ?? {}).length)
       return res.status(422).json({ error: "invalid_request" });
+    if (!(await budget(req, res, "identity"))) return;
     try {
       await callRpc(req.customer, "sim_state", { p_tenant_id: config.tenant });
       // Auth identities are supplied by Supabase's verified provider callback, never user_metadata.
@@ -252,6 +305,7 @@ export function createCustomerRouter({
       return res.status(503).json({ error: "iracing_not_activated" });
     if (Object.keys(req.body ?? {}).length)
       return res.status(422).json({ error: "invalid_request" });
+    if (!(await budget(req, res, "identity"))) return;
     try {
       await callRpc(req.customer, "sim_state", { p_tenant_id: config.tenant });
       const auth = await beginIRacing(admin, config.tenant, req.user.id, env);
@@ -272,6 +326,7 @@ export function createCustomerRouter({
       return res.status(503).json({ error: "steam_not_activated" });
     if (Object.keys(req.body ?? {}).length)
       return res.status(422).json({ error: "invalid_request" });
+    if (!(await budget(req, res, "identity"))) return;
     try {
       await callRpc(req.customer, "sim_state", { p_tenant_id: config.tenant });
       const state = randomBytes(32).toString("base64url"),

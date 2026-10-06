@@ -168,14 +168,18 @@ export async function handleInteraction(
           value:
             "Verified event rules apply. Winning payout is 90% of both entries; 10% platform fee. Invalid results, ties, confirmed disconnects, and expired validation receive a full zero-fee refund.",
         },
-        { name: "Event", value: event },
+        { name: "Event", value: result.event_title || event },
+        {
+          name: "Track",
+          value: result.track_name || "See registered event terms",
+        },
       )
       .setFooter({ text: `Challenge ${result.offer_id}` });
     const buttons = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`accept_${result.offer_id}_${opponent.id}`)
         .setStyle(ButtonStyle.Success)
-        .setLabel("Accept fixed challenge terms"),
+        .setLabel("Accept Challenge 🏎️"),
       new ButtonBuilder()
         .setStyle(ButtonStyle.Link)
         .setURL(url.href)

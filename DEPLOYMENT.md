@@ -62,8 +62,18 @@ For rollback, restore a prior known-good web deployment while preserving the cur
 
 ## Current activation boundary
 
-The web release can be published without secrets. This session does not possess working racing Supabase project credentials, an authorized live iRacing client/operator account, approved merchant credentials, an activated ACC source host, Discord bot credentials, or a persistent worker deployment. These are explicit remaining activation dependencies, not simulated production integrations. Supabase connector discovery currently returns an authorization error; reconnect the intended account before project selection or provisioning.
+The web release can be published without secrets. This session does not possess working racing Supabase project credentials, an authorized live iRacing client/operator account, approved merchant credentials, an activated ACC source host, Discord bot credentials, or a persistent worker deployment. These are explicit remaining activation dependencies, not simulated production integrations. Supabase discovery is available, but the four discovered projects are unrelated and inactive. Select a dedicated organization/project and complete required Supabase cost confirmation before provisioning.
 
 ### ACC host bridge execution
 
 `node server/acc-bridge.js /path/to/final-result.json /path/to/session-log.json` runs on the trusted host after the dedicated server has finalized the results file. The session log must contain `external_session_id` matching the result file's `metaData`, and `actual_start` as an ISO UTC timestamp captured from the real server's session start. Configure the host's `ACC_PROVIDER_KEY_ID`, `ACC_PROVIDER_SECRET_BASE64`, and HTTPS backend origin; do not give the game host a database service key. The bridge fetches provider-bound active contracts, normalizes each driver's evidence, signs exact bytes, and retries the same source receipt. Re-running the same immutable result/log files is safe. Malformed or ambiguous files remain unconfirmed.
+
+## Version 4 activation additions
+
+Apply `20261006092644_institutional_controls.sql` once after the earlier migrations. A fresh installation uses the generated `supabase/schema.sql`; do not apply both to the same database. The enum extension commits before the main transactional DDL as PostgreSQL requires. Take a verified backup before migrating an existing live ledger; audit backfill intentionally locks journal writes and may require a scheduled maintenance window. The remaining DDL is atomic.
+
+Install the disabled catalog using the service-only `grid_install_catalog(tenant_uuid)` RPC. It creates bronze 10 USD / 10,000 GC / 10 promotional SC, silver 20 USD / 25,000 GC / 22 promotional SC, and gold 50 USD / 60,000 GC / 55 promotional SC. Actual checkout uses immutable database catalog terms and exact payment verification. Enable products only after the supported merchant and program decisions are complete.
+
+Use distinct verification and operator keyrings. Publish approved program terms, activate the correct version, connect the real identity/location/risk bridge, and verify both free entry and SC participation enforce the same live eligibility. Do not use test assertions as production verification. Rules publication alone does not enable SC, commerce or redemption. See `docs/COMPLIANCE.md` and the complete `docs/ENVIRONMENT.md`.
+
+Before enabling private Realtime, disable public channel access in Supabase and verify own-wallet subscription, cross-tenant rejection and session revocation. Keep `REALTIME_ENABLED=false` until those platform settings have been verified. Configure a secure scheduled audit exporter and store checkpoints externally in immutable storage. Configure monitoring and reconciliation separately; the release does not provision drains, an external anchor service, or cash payout operations.

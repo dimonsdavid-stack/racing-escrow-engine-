@@ -64,6 +64,12 @@ export async function runWorker() {
       const results = await processResults(client),
         refunds = await sweep(client, { limit: 50 });
       console.log(JSON.stringify({ worker: "results", ...results, refunds }));
+      await callRpc(
+        client,
+        "grid_cleanup_budgets",
+        {},
+        { attempts: 1, timeoutMs: 2000 },
+      );
     } catch {
       console.error(
         JSON.stringify({ worker: "results", status: "retry_required" }),

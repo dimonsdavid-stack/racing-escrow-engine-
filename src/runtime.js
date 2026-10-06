@@ -23,11 +23,35 @@ export function createRuntimeApp(env = process.env) {
   } catch {
     brokerKeys = new Map();
   }
+  let complianceKeys, operatorKeys;
+  try {
+    complianceKeys = parseKeys(env.COMPLIANCE_KEYS_JSON || "[]");
+  } catch {
+    complianceKeys = new Map();
+  }
+  try {
+    operatorKeys = parseKeys(env.OPERATOR_KEYS_JSON || "[]");
+  } catch {
+    operatorKeys = new Map();
+  }
+  // Roles cannot share a signing secret, even when key identifiers differ.
+  const rings = [keys, brokerKeys, complianceKeys, operatorKeys],
+    seen = new Set();
+  let collision = false;
+  for (const ring of rings)
+    for (const key of ring.values()) {
+      const value = key.secret.toString("base64");
+      if (seen.has(value)) collision = true;
+      seen.add(value);
+    }
+  if (collision) for (const ring of rings) ring.clear();
   return createApp({
     env,
     brokerKeys,
     client,
     keys,
+    complianceKeys,
+    operatorKeys,
     customerOptions: { env },
     cronSecret: env.CRON_SECRET,
   });

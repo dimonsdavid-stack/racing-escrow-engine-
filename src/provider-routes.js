@@ -69,7 +69,7 @@ export function createProviderRouter({
       }),
   );
   route("/api/v1/providers/events", EventRegistration, async (i, d) =>
-    callRpc(client, "sim_register_event", {
+    callRpc(client, "grid_register_event", {
       p_tenant_id: i.tenantId,
       p_provider_id: i.providerId,
       ...Object.fromEntries(Object.entries(d).map(([k, v]) => ["p_" + k, v])),

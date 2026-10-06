@@ -257,7 +257,7 @@ test("customer REST verifies bearer identity, ignores body actor injection and p
       return {
         abortSignal() {
           return Promise.resolve({
-            data: { status: "ok" },
+            data: name==='grid_request_budget'?{allowed:true,retry_after:60}:{ status: "ok" },
             error: null,
             status: 200,
           });
@@ -303,9 +303,10 @@ test("customer REST verifies bearer identity, ignores body actor injection and p
       }),
     });
     assert.equal(r.status, 200);
-    assert.equal(calls[0].name, "sim_offer");
-    assert.equal(calls[0].args.p_tenant_id, T);
-    assert.equal(calls[0].args.p_user_id, undefined);
+    assert.equal(calls[0].name,'grid_request_budget');
+    assert.equal(calls[1].name, "sim_offer");
+    assert.equal(calls[1].args.p_tenant_id, T);
+    assert.equal(calls[1].args.p_user_id, undefined);
     const config = await (await fetch(origin + "/api/v1/app/config")).json();
     assert.equal(config.accounts_available, true);
     assert.equal(config.commerce_available, false);

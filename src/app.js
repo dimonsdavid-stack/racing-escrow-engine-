@@ -12,6 +12,8 @@ import { createOAuthRouter, createSteamRouter } from "./oauth.js";
 import { fileURLToPath } from "node:url";
 import { createCustomerRouter } from "./customer.js";
 import { sweep } from "./sweep.js";
+import { corsPolicy } from "./cors.js";
+import { createComplianceRouter } from "./compliance.js";
 
 const publicDirectory = fileURLToPath(
   new URL("../frontend/out/", import.meta.url),
@@ -27,6 +29,8 @@ export function createApp({
   env = process.env,
   brokerKeys = new Map(),
   stripe,
+  complianceKeys = new Map(),
+  operatorKeys = new Map(),
 } = {}) {
   const writeLog = safeLogger(log);
   const configured = Boolean(client && keys.size);
@@ -49,7 +53,7 @@ export function createApp({
   const pageCSP =
     "default-src 'self'; script-src 'self' " +
     hashes.join(" ") +
-    "; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
+    "; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
   app.disable("x-powered-by");
   app.set("trust proxy", false);
   app.use((req, res, next) => {
@@ -63,6 +67,7 @@ export function createApp({
     next();
   });
   app.get("/healthz", (_req, res) => res.json({ status: "ok" }));
+  app.use(corsPolicy(env));
   app.get("/api/v1/operations/refund-expired", async (req, res) => {
     if (!client || typeof cronSecret !== "string" || cronSecret.length < 32)
       return res.status(503).json({ error: "refund_scheduler_not_configured" });
@@ -90,12 +95,19 @@ export function createApp({
   app.get("/api/v1/status", (_req, res) =>
     res.json({
       service: "racing-escrow-engine",
-      version: "3.0.0",
+      version: "4.0.0",
       settlement: configured ? "configured" : "configuration_required",
       database_connectivity: "unchecked",
     }),
   );
   app.use(createCommerceRouter({ client, env, stripe }));
+  app.use(
+    createComplianceRouter({
+      client,
+      complianceKeys,
+      reviewKeys: operatorKeys,
+    }),
+  );
   app.use(createProviderRouter({ client, keys, brokerKeys }));
   app.use(createOAuthRouter({ client, env }));
   app.use(createSteamRouter({ client, env }));
