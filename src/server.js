@@ -9,9 +9,10 @@ try {
     throw new Error("invalid_port");
   const client = createAdminClient();
   const keys = parseKeys(process.env.TELEMETRY_KEYS_JSON || "[]");
-  server = createRuntimeApp().listen(port, "0.0.0.0", () =>
-    console.log(JSON.stringify({ event: "listening", port })),
-  );
+  server = createRuntimeApp().listen(port, "0.0.0.0", () => {
+    console.log(JSON.stringify({ event: "listening", port }));
+    process.send?.("ready");
+  });
   server.requestTimeout = 45000;
   server.headersTimeout = 10000;
   server.keepAliveTimeout = 5000;
@@ -24,7 +25,10 @@ try {
   console.error("startup_failed_check_server_configuration");
   process.exit(1);
 }
+let stopping = false;
 function shutdown() {
+  if (stopping) return;
+  stopping = true;
   server.close(() => process.exit(0));
   setTimeout(() => {
     server.closeAllConnections();
@@ -33,3 +37,7 @@ function shutdown() {
 }
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+
+process.on("message", (message) => {
+  if (message === "shutdown") shutdown();
+});

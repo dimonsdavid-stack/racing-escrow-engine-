@@ -1,6 +1,6 @@
 # Promotion, risk and audit controls
 
-This release implements enforcement and evidence collection. It does not establish a lawful sweepstakes, grant merchant or simulator permission, provide kernel anti-cheat, or implement cash redemption. The operator must commission jurisdiction-specific rules and vendor integrations before SC activation.
+This release implements enforcement and evidence collection. It does not establish a lawful sweepstakes, grant merchant or simulator permission, provide kernel anti-cheat, or activate an external cash-redemption provider. V4.2 implements the ledger and provider adapter described in [REDEMPTION.md](REDEMPTION.md). The operator must commission jurisdiction-specific rules and vendor integrations before SC activation.
 
 ## Program publication
 

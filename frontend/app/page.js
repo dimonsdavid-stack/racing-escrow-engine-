@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import ProgramPanel from "./ProgramPanel.js";
+import RedemptionPanel from "./RedemptionPanel.js";
 import { PUBLISHED_PACKAGES } from "../../src/catalog.js";
 const NAV = [
   ["lobby", "Challenge lobby", "grid"],
@@ -1127,7 +1128,7 @@ export default function Dashboard() {
                   is independent of checkout. Purchases do not improve a race
                   result.{" "}
                   <a className="text-button" href="#help">
-                    View official rules & free entry ↗
+                    View program rules & free entry ↗
                   </a>
                 </div>
                 {catalog.length ? (
@@ -1979,23 +1980,16 @@ export default function Dashboard() {
               </>
             )}
             {modal === "redemption" && (
-              <>
-                <h2 id="dialog-title">SC eligibility & redemption.</h2>
-                <p>
-                  Sweeps Coins are promotional assets kept separately from Gold
-                  Coins. SC participation requires an approved program and
-                  account eligibility.
-                </p>
-                <div className="alert">
-                  Cash redemption is not activated on this deployment. No
-                  withdrawal requests or identity documents are collected here.
-                </div>
-                <p>
-                  The operator must publish official promotion rules, eligible
-                  regions, verification requirements, and an approved redemption
-                  process before activating SC commerce.
-                </p>
-              </>
+              <RedemptionPanel
+                api={api}
+                config={config}
+                signedIn={Boolean(session)}
+                onSignIn={() => setModal("auth")}
+                onRefresh={refresh}
+                requestScope={
+                  me?.user_id ? `${config?.tenant_id}:${me.user_id}` : null
+                }
+              />
             )}
             {modal === "rules" && (
               <>
@@ -2076,7 +2070,12 @@ export default function Dashboard() {
                         ? "Configured — merchant activation required"
                         : "Inactive",
                     ],
-                    ["Cash redemption", "Inactive"],
+                    [
+                      "Cash redemption",
+                      config?.redemption_available
+                        ? "Configured — provider confirmation required"
+                        : "Awaiting provider setup",
+                    ],
                   ].map(([k, v]) => (
                     <div key={k}>
                       <dt>{k}</dt>

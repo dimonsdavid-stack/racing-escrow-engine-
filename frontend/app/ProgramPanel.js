@@ -62,6 +62,9 @@ export default function ProgramPanel({
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
+          <a className="text-button" href="/sweepstakes-rules.html">
+            Program rules & publication status ↗
+          </a>
           <span className="eyebrow">ALTERNATIVE METHOD OF ENTRY</span>
           <h2 id="free-entry-title">No purchase necessary.</h2>
           <p className="max-w-2xl text-sm text-neutral-200">

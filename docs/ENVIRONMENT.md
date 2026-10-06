@@ -20,7 +20,7 @@ Use `.env.production.example` as the complete deployment template. Empty secrets
 | `OPERATOR_KEYS_JSON` | Separate operator program publication/review keyring |
 | `REALTIME_ENABLED` | `false` until private Realtime authorization/public-access settings validated |
 | `COMMERCE_APPROVED` | `false` until actual business-model authorization; a flag is not merchant permission |
-| `STRIPE_SECRET_KEY` | Actual merchant secret for the authorized environment |
+| `STRIPE_SECRET_KEY` | Actual `sk_live_` merchant secret; production refuses test keys |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for this exact webhook endpoint/environment |
 | `IRACING_CLIENT_ID` | Issued official OAuth client ID |
 | `IRACING_CLIENT_SECRET` | Issued OAuth client secret when required by client registration |
@@ -62,3 +62,16 @@ Each keyring is a JSON array of objects with `key_id`, `tenant_id`, `provider_id
 Send an operator JSON file using `node scripts/send-signed.js /api/v1/compliance/programs/publish /secure/path/program.json operator`. The script requires the trusted shell's actual key configuration, signs the file's exact bytes and refuses redirects. Build program JSON from approved operator terms, including rule document digest and authorization reference. Reuse the same file and change UUID on interrupted requests. Verification bridges use role `compliance`, racing hosts use `telemetry`. No browser should possess these credentials.
 
 Vercel runs the stateless Express web/API with the static Next.js export. Render, Heroku or another container host runs persistent `node src/worker.js` and `node discord/bot.js` as separate services using the same dedicated database and correctly separated secrets. This release does not provision those hosts or claim to run a permanent Discord Gateway inside a Vercel function.
+
+## KYC and redemption variables
+
+| Variable | Meaning |
+|---|---|
+| `SUMSUB_APP_TOKEN` | Production application token |
+| `SUMSUB_SECRET_KEY` | Server-only request HMAC secret |
+| `SUMSUB_WEBHOOK_SECRET` | Dedicated raw webhook HMAC secret |
+| `SUMSUB_LEVEL_NAME` | Production individual verification level with actual document/address checks |
+| `SUMSUB_WEBSDK_HOST` | Exact Production hosted link domain confirmed by Sumsub; must be within `sumsub.com` |
+| `PM2_HOME` | Persistent host PM2 process state location; Docker uses `/tmp/gridstake-pm2` |
+
+Redemption uses the actual live Stripe Connect platform when that provider supports the business, the existing Supabase server credentials, exact public origin and real operator/program configuration. The durable worker reconciles by authenticated provider retrieval; no simulated transfer or caller-supplied bank identifiers exist. See [REDEMPTION.md](REDEMPTION.md).

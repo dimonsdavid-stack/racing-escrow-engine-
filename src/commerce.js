@@ -5,7 +5,9 @@ import { z } from "zod";
 export function commerceReady(env) {
   return (
     env.COMMERCE_APPROVED === "true" &&
-    /^sk_(live|test)_/.test(env.STRIPE_SECRET_KEY ?? "") &&
+    (env.NODE_ENV === "production" ? /^sk_live_/ : /^sk_(live|test)_/).test(
+      env.STRIPE_SECRET_KEY ?? "",
+    ) &&
     /^whsec_/.test(env.STRIPE_WEBHOOK_SECRET ?? "") &&
     /^https:\/\//.test(env.APP_ORIGIN ?? "")
   );
@@ -37,6 +39,8 @@ export function createCommerceRouter({
       } catch {
         return res.status(400).json({ error: "invalid_signature" });
       }
+      if (env.NODE_ENV === "production" && event.livemode !== true)
+        return res.status(400).json({ error: "production_events_required" });
       try {
         if (
           [
@@ -113,7 +117,14 @@ export async function createCheckout(
     stripeClient ??
     new Stripe(env.STRIPE_SECRET_KEY, { maxNetworkRetries: 2, timeout: 10000 });
   const origin = new URL(env.APP_ORIGIN);
-  if (origin.protocol !== "https:" || origin.username || origin.password)
+  if (
+    origin.protocol !== "https:" ||
+    origin.username ||
+    origin.password ||
+    origin.pathname !== "/" ||
+    origin.search ||
+    origin.hash
+  )
     throw new Error("invalid_app_origin");
   const s = await stripe.checkout.sessions.create(
     {

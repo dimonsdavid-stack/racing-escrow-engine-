@@ -5,6 +5,8 @@ import { callRpc, RpcError, retryable } from "./settlement.js";
 import { commerceReady, createCheckout } from "./commerce.js";
 import { beginIRacing, oauthReady, hashState, encrypt } from "./oauth.js";
 import { randomBytes } from "node:crypto";
+import { kycReady, SumsubClient, refreshKyc } from "./kyc.js";
+import { redemptionReady, connectBank } from "./redemption.js";
 import { PUBLISHED_PACKAGES } from "./catalog.js";
 export function customerConfig(env = process.env) {
   try {
@@ -118,6 +120,7 @@ export function createCustomerRouter({
   makeClient = createClient,
   admin,
   stripe,
+  kycProvider,
 } = {}) {
   const r = express.Router(),
     config = customerConfig(env);
@@ -132,7 +135,10 @@ export function createCustomerRouter({
       steam_available: Boolean(
         admin && env.OAUTH_ENCRYPTION_KEY && env.APP_ORIGIN,
       ),
-      redemption_available: false,
+      redemption_available: Boolean(
+        admin && config && redemptionReady(env) && kycReady(env),
+      ),
+      kyc_available: Boolean(admin && config && kycReady(env)),
       practice_available: false,
       package_catalog: PUBLISHED_PACKAGES,
       realtime_available: env.REALTIME_ENABLED === "true",
@@ -242,6 +248,7 @@ export function createCustomerRouter({
   r.get("/lobby", (req, res) => rpc(req, res, "sim_lobby", {}));
   r.get("/catalog", (req, res) => rpc(req, res, "sim_catalog", {}));
   r.get("/compliance", (req, res) => rpc(req, res, "grid_compliance", {}));
+  r.get("/redemptions", (req, res) => rpc(req, res, "cash_state", {}));
   r.get("/audit", (req, res) => rpc(req, res, "grid_wallet_audit", {}));
   r.use(express.json({ limit: "16kb", strict: true }));
   for (const [path, [name, schema, args]] of Object.entries(specs))
@@ -266,6 +273,93 @@ export function createCustomerRouter({
       return res.json(
         await createCheckout(req.customer, config.tenant, d.data, env, stripe),
       );
+    } catch (e) {
+      return reject(res, e);
+    }
+  });
+  r.post("/kyc/start", async (req, res) => {
+    if (Object.keys(req.body ?? {}).length)
+      return res.status(422).json({ error: "invalid_request" });
+    if (!admin || !kycReady(env))
+      return res.status(503).json({ error: "verification_not_configured" });
+    if (!(await budget(req, res, "identity"))) return;
+    try {
+      const context = await callRpc(req.customer, "cash_begin_kyc", {
+        p_tenant_id: config.tenant,
+      });
+      return res.json(
+        await (kycProvider ?? new SumsubClient(env)).link(
+          context.external_user_id,
+        ),
+      );
+    } catch (e) {
+      return reject(res, e);
+    }
+  });
+  r.post("/bank/connect", async (req, res) => {
+    if (Object.keys(req.body ?? {}).length)
+      return res.status(422).json({ error: "invalid_request" });
+    if (!admin || !redemptionReady(env))
+      return res.status(503).json({ error: "live_payouts_not_configured" });
+    if (!(await budget(req, res, "identity"))) return;
+    try {
+      return res.json(
+        await connectBank(req.customer, admin, config.tenant, env, stripe),
+      );
+    } catch (e) {
+      return reject(res, e);
+    }
+  });
+  r.post("/redeem", async (req, res) => {
+    const body = z
+      .object({
+        request_id: z.uuid(),
+        amount_sc: z.string().regex(/^\d{1,5}(?:\.\d{1,2})?$/),
+      })
+      .strict()
+      .safeParse(req.body);
+    if (!body.success)
+      return res.status(422).json({ error: "invalid_request" });
+    if (!admin || !redemptionReady(env) || !kycReady(env))
+      return res.status(503).json({ error: "live_redemptions_not_configured" });
+    if (!(await budget(req, res, "mutate"))) return;
+    try {
+      const state = await callRpc(req.customer, "cash_state", {
+        p_tenant_id: config.tenant,
+      });
+      if (!state.requests.some((x) => x.id === body.data.request_id)) {
+        if (!state.kyc_reference_id)
+          return res
+            .status(403)
+            .json({ error: "identity_verification_required" });
+        await refreshKyc(
+          admin,
+          env,
+          config.tenant,
+          req.user.id,
+          state.kyc_reference_id,
+          kycProvider ?? new SumsubClient(env),
+        );
+        const bank = await connectBank(
+          req.customer,
+          admin,
+          config.tenant,
+          env,
+          stripe,
+          { onboard: false },
+        );
+        if (!bank.ready)
+          return res.status(403).json({ error: "bank_verification_required" });
+      }
+      return res
+        .status(202)
+        .json(
+          await callRpc(req.customer, "execute_atomic_withdrawal_debit", {
+            p_tenant_id: config.tenant,
+            p_request_id: body.data.request_id,
+            p_amount_sc: body.data.amount_sc,
+          }),
+        );
     } catch (e) {
       return reject(res, e);
     }

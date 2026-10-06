@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { createCustomerRouter } from "./customer.js";
 import { sweep } from "./sweep.js";
 import { corsPolicy } from "./cors.js";
+import { createKycRouter } from "./kyc.js";
 import { createComplianceRouter } from "./compliance.js";
 
 const publicDirectory = fileURLToPath(
@@ -95,12 +96,13 @@ export function createApp({
   app.get("/api/v1/status", (_req, res) =>
     res.json({
       service: "racing-escrow-engine",
-      version: "4.0.0",
+      version: "4.2.0",
       settlement: configured ? "configured" : "configuration_required",
       database_connectivity: "unchecked",
     }),
   );
   app.use(createCommerceRouter({ client, env, stripe }));
+  app.use(createKycRouter({ admin: client, env }));
   app.use(
     createComplianceRouter({
       client,
@@ -231,6 +233,10 @@ export function createApp({
   });
   app.use("/api/v1/stripe/create-checkout", (req, res, next) => {
     req.url = "/checkout";
+    customerRouter(req, res, next);
+  });
+  app.use("/api/v1/wallet/redeem", (req, res, next) => {
+    req.url = "/redeem";
     customerRouter(req, res, next);
   });
   app.use("/api/v1/app", customerRouter);

@@ -432,3 +432,118 @@ test("free entry records consent, retries the same receipt and displays only con
     fullPage: true,
   });
 });
+
+test("cash redemption retries the persisted request across reload and shows only confirmed state", async ({
+  page,
+}, info) => {
+  await account(page);
+  await page.route("**/api/v1/app/config", (r) =>
+    r.fulfill({
+      json: {
+        accounts_available: true,
+        supabase_url: "https://example.supabase.co",
+        publishable_key: "sb_publishable_test",
+        tenant_id: E,
+        redemption_available: true,
+        kyc_available: true,
+      },
+    }),
+  );
+  const profile = {
+    user_id: A,
+    handle: "Grid_Racer",
+    gc_balance: "1000.000000",
+    sc_balance: "90.000000",
+    sc_locked_entry: "0.000000",
+    gc_locked_entry: "0.000000",
+    sc_eligible: true,
+    identities: [],
+    contracts: [],
+    history: [],
+  };
+  let state = {
+    kyc_status: "Verified",
+    bank_connected: true,
+    redeemable_sc: "90.000000",
+    requests: [],
+  };
+  await page.route("**/api/v1/app/me", (r) => r.fulfill({ json: profile }));
+  await page.route("**/api/v1/app/lobby", (r) =>
+    r.fulfill({ json: { events: [], offers: [] } }),
+  );
+  await page.route("**/api/v1/app/catalog", (r) =>
+    r.fulfill({ json: { packages: [] } }),
+  );
+  await page.route("**/api/v1/app/redemptions", (r) =>
+    r.fulfill({ json: state }),
+  );
+  const attempts = [];
+  await page.route("**/api/v1/app/redeem", (r) => {
+    const body = r.request().postDataJSON();
+    attempts.push(body);
+    if (attempts.length === 1)
+      return r.fulfill({ status: 503, json: { error: "retry_same_request" } });
+    state = {
+      ...state,
+      redeemable_sc: "40.000000",
+      requests: [
+        { id: body.request_id, amount_sc: "50.000000", state: "Reserved" },
+      ],
+    };
+    profile.sc_balance = "40.000000";
+    return r.fulfill({
+      status: 202,
+      json: { id: body.request_id, state: "Reserved", amount_sc: "50.000000" },
+    });
+  });
+  await page.goto("/#wallet");
+  await page
+    .getByRole("button", { name: /View eligibility & redemption/ })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("90.000000", { exact: true })).toBeVisible();
+  await expect(dialog.locator("input")).toHaveCount(1);
+  await dialog
+    .getByRole("button", { name: "Request redemption", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "Retry with the same amount",
+  );
+  await expect(dialog.getByText("90.000000", { exact: true })).toBeVisible();
+  await page.reload();
+  await page
+    .getByRole("button", { name: /View eligibility & redemption/ })
+    .click();
+  await expect(page.getByLabel("Amount in SC")).toBeDisabled();
+  await dialog.getByRole("button", { name: "Retry saved request" }).click();
+  await expect(dialog.getByRole("status")).toContainText("confirmed: Reserved");
+  expect(attempts[0]).toEqual(attempts[1]);
+  await expect(dialog.getByText("40.000000", { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("redemption-reserved.png"),
+    fullPage: true,
+  });
+});
+test("public program rules disclose publication status and keep the unverified postal address inactive", async ({
+  page,
+}, info) => {
+  await page.goto("/sweepstakes-rules.html");
+  await expect(
+    page.getByRole("heading", {
+      name: "Program rules. Clear terms, before entry.",
+    }),
+  ).toBeVisible();
+  await expect(page.locator("#program-status")).toContainText(
+    "No active operator promotion",
+  );
+  await expect(page.locator("#entry")).toContainText("Do not send mail");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: info.outputPath("program-rules.png"),
+    fullPage: true,
+  });
+});

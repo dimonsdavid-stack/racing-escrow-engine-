@@ -87,14 +87,12 @@ export function createComplianceRouter({
               e.code
             ] ?? 503;
           if (status === 503) res.set("Retry-After", "2");
-          return res
-            .status(status)
-            .json({
-              error:
-                status === 503
-                  ? "retry_same_receipt"
-                  : "compliance_receipt_rejected",
-            });
+          return res.status(status).json({
+            error:
+              status === 503
+                ? "retry_same_receipt"
+                : "compliance_receipt_rejected",
+          });
         }
       },
     );
@@ -158,6 +156,39 @@ export function createComplianceRouter({
     reviewKeys,
     "grid_activate_program",
     (d) => Object.fromEntries(Object.entries(d).map(([k, v]) => ["p_" + k, v])),
+  );
+  signedRoute(
+    "/api/v1/compliance/ame/postal",
+    z
+      .object({
+        receipt_id: z.uuid(),
+        auth_user_id: z.uuid(),
+        program_id: z.uuid(),
+        document_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        received_at: z.iso.datetime({ offset: true }),
+        authorization_reference: z.string().min(10).max(500),
+      })
+      .strict(),
+    reviewKeys,
+    "cash_postal",
+    (d) => Object.fromEntries(Object.entries(d).map(([k, v]) => ["p_" + k, v])),
+  );
+  signedRoute(
+    "/api/v1/compliance/redemptions/reconcile",
+    z
+      .object({
+        request_id: z.uuid(),
+        receipt_id: z.uuid(),
+        reason: z.string().min(10).max(500),
+      })
+      .strict(),
+    reviewKeys,
+    "cash_wake_review",
+    (d) => ({
+      p_request_id: d.request_id,
+      p_receipt_id: d.receipt_id,
+      p_reason: d.reason,
+    }),
   );
   return router;
 }

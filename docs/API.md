@@ -86,3 +86,7 @@ Signed routes use the existing raw-body HMAC protocol, including exact route pat
 Future event registration adds decimal-string `min_lap_seconds` and `max_lap_seconds` (defaults 1 and 3600). The operator must choose plausible bounds for the actual event. Normalized telemetry laps can additionally carry an integer `flags`; any nonzero value is disregarded. Provider-specific session flags are not automatically lap-validity flags.
 
 The compatibility RPC `execute_p2p_escrow(p_challenge_id UUID)` resolves the authenticated invited opponent and tenant rather than accepting a user ID. `commit_challenge_settlement(p_challenge_id UUID,p_winner_id UUID,p_payout_amount NUMERIC,p_token_type TEXT,p_subsession TEXT)` is service-only and checks the supplied terms against authoritative stored evidence. Payout cannot be chosen by a customer or caller-provided amount. Refunds now explicitly use challenge state `Refunded`.
+
+## v4.2 cash and hosted verification
+
+See [REDEMPTION.md](REDEMPTION.md) for the exact cash, bank, KYC and postal receipt contracts. Customer redemption bodies contain only an idempotent request UUID and an exact decimal SC amount. The authenticated account determines ownership; raw bank details and body-supplied owner IDs are rejected. Provider confirmation, not a successful HTTP request, determines paid status.

@@ -1075,6 +1075,147 @@ test("native PostgreSQL concurrent escrow mutations", async (t) => {
         );
       },
     );
+    await t.test(
+      "cash withdrawals across independent sessions cannot overspend or double-reserve",
+      async () => {
+        await admin.query("RESET ROLE");
+        await admin.query(
+          await readFile(
+            new URL(
+              "../supabase/migrations/20261006112856_cash_redemption.sql",
+              import.meta.url,
+            ),
+            "utf8",
+          ),
+        );
+        const actorId = randomUUID();
+        await admin.query(
+          "INSERT INTO auth.users(id,email_confirmed_at) VALUES($1,now());",
+          [actorId],
+        );
+        await admin.query(
+          "INSERT INTO auth.sessions(id,user_id) VALUES($1,$1)",
+          [actorId],
+        );
+        const claims = JSON.stringify({ sub: actorId, session_id: actorId });
+        await admin.query("SELECT set_config('request.jwt.claims',$1,false)", [
+          claims,
+        ]);
+        await admin.query("SET ROLE authenticated");
+        const own = (
+          await admin.query(
+            "SELECT public.race_enroll($1,'NativeCashOwner',true) AS r",
+            [T],
+          )
+        ).rows[0].r.user_id;
+        const program = (
+          await admin.query("SELECT public.grid_program($1) AS r", [T])
+        ).rows[0].r.program.id;
+        await admin.query("SELECT public.grid_consent($1,$2)", [T, program]);
+        const account = (
+          await admin.query("SELECT public.cash_begin_account($1) AS r", [T])
+        ).rows[0].r;
+        await admin.query("RESET ROLE");
+        const provider = (
+          await admin.query(
+            "SELECT id FROM race_private.providers WHERE tenant_id=$1 AND enabled LIMIT 1",
+            [T],
+          )
+        ).rows[0].id;
+        // Native fixtures seed classified winnings; full source-based classification
+        // and refund restoration are verified separately against the complete schema.
+        await admin.query(
+          "UPDATE race_private.users SET sc_balance=100,sc_redeemable_balance=100 WHERE tenant_id=$1 AND id=$2",
+          [T, own],
+        );
+        for (const purpose of ["identity", "location"])
+          await admin.query(
+            "SELECT public.grid_record_compliance($1,$2,$3,$4,$5,'approved','native cash evidence',clock_timestamp()-interval '1 second',clock_timestamp()+interval '2 minutes',$6,$7,$8,false,$9)",
+            [
+              T,
+              provider,
+              randomUUID(),
+              actorId,
+              purpose,
+              purpose === "identity" ? "f".repeat(64) : null,
+              purpose === "identity" ? 21 : null,
+              purpose === "location" ? "US-CA" : null,
+              "b".repeat(64),
+            ],
+          );
+        await admin.query(
+          "SELECT public.cash_record_kyc($1,$2,'native-cash-kyc',$3,'Verified',clock_timestamp(),$4)",
+          [T, actorId, "f".repeat(24), "c".repeat(64)],
+        );
+        await admin.query(
+          "SELECT public.cash_bind_account($1,$2,$3,'acct_nativeCash','ba_nativeCash',true)",
+          [T, own, account.intent_id],
+        );
+        const requests = Array.from({ length: 8 }, () => randomUUID());
+        const results = await concurrent(
+          requests.map((id) => async (c) => {
+            await c.query("SELECT set_config('request.jwt.claims',$1,false)", [
+              claims,
+            ]);
+            await c.query("SET ROLE authenticated");
+            return (
+              await c.query(
+                "SELECT public.execute_atomic_withdrawal_debit($1,$2,'50.00') AS r",
+                [T, id],
+              )
+            ).rows[0].r;
+          }),
+        );
+        assert.equal(results.filter((r) => r.status === "fulfilled").length, 2);
+        for (const failure of results.filter((r) => r.status === "rejected"))
+          assert.equal(failure.reason.code, "PT409");
+        const balance = (
+          await admin.query(
+            "SELECT sc_balance::text,sc_redeemable_balance::text FROM race_private.users WHERE tenant_id=$1 AND id=$2",
+            [T, own],
+          )
+        ).rows[0];
+        assert.equal(balance.sc_balance, "0.000000");
+        assert.equal(balance.sc_redeemable_balance, "0.000000");
+        const winner = results.find((r) => r.status === "fulfilled").value.id;
+        const replay = await concurrent(
+          Array.from({ length: 8 }, () => async (c) => {
+            await c.query("SELECT set_config('request.jwt.claims',$1,false)", [
+              claims,
+            ]);
+            await c.query("SET ROLE authenticated");
+            return (
+              await c.query(
+                "SELECT public.execute_atomic_withdrawal_debit($1,$2,'50.00') AS r",
+                [T, winner],
+              )
+            ).rows[0].r;
+          }),
+        );
+        assert.ok(
+          replay.every(
+            (r) => r.status === "fulfilled" && r.value.duplicate === true,
+          ),
+        );
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT count(*)::int AS n FROM race_private.redemptions WHERE tenant_id=$1 AND user_id=$2",
+              [T, own],
+            )
+          ).rows[0].n,
+          2,
+        );
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT sum(delta)::text AS n FROM race_private.journal_lines",
+            )
+          ).rows[0].n,
+          "0.000000",
+        );
+      },
+    );
   } finally {
     admin?.release();
     await pool.end();
