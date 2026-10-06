@@ -797,6 +797,10 @@ test("native PostgreSQL concurrent escrow mutations", async (t) => {
           1,
         );
         // Fail after wallet posting, before evidence receipt. The entire RPC rolls back.
+        await admin.query(
+          "UPDATE race_private.sim_events SET starts_at=clock_timestamp(),funding_closes_at=clock_timestamp()-interval '1 millisecond' WHERE id=$1",
+          [event],
+        );
         const context = (
           await admin.query("SELECT public.sim_result_context($1,$2) AS r", [
             T,

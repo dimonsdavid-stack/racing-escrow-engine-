@@ -106,6 +106,29 @@ test("external sim consent binds identities and future event; replay does not fu
       rpc(db, "sim_link_identity", [T, B, "iracing", "789"]),
       /identity_locked/,
     );
+    const scheduled = await rpc(db, "sim_result_context", [T, offer]);
+    await assert.rejects(
+      rpc(db, "sim_commit_result", [
+        T,
+        P,
+        offer,
+        "premature:" + offer,
+        "876",
+        "Spa",
+        scheduled.starts_at,
+        "f".repeat(64),
+        "winner",
+        "60",
+        "62",
+        {},
+      ]),
+      /historical_or_wrong_session/,
+    );
+    // Advance this scheduled-event fixture to an actual start after funding.
+    await db.query(
+      "UPDATE race_private.sim_events SET starts_at=clock_timestamp(),funding_closes_at=clock_timestamp()-interval '1 millisecond' WHERE id=$1",
+      [E],
+    );
     const c = await rpc(db, "sim_result_context", [T, offer]);
     const args = [
       T,
@@ -203,6 +226,11 @@ test("scheduled funding cutoff, payment review, and full zero-fee no-clean refun
     await actor(db, B);
     await rpc(db, "sim_accept", [T, offer, true, null]);
     await db.exec("RESET ROLE");
+    // Advance this scheduled-event fixture to an actual start after funding.
+    await db.query(
+      "UPDATE race_private.sim_events SET starts_at=clock_timestamp(),funding_closes_at=clock_timestamp()-interval '1 millisecond' WHERE id=$1",
+      [E],
+    );
     const c = await rpc(db, "sim_result_context", [T, offer]);
     const r = await rpc(db, "sim_commit_result", [
       T,
@@ -529,4 +557,74 @@ test("Discord accept rejects a different player before any backend request and k
   assert.equal(calls, 0);
   assert.match(reply, /Only the invited/);
   assert.equal(interactionUUID("123"), interactionUUID("123"));
+});
+
+test("trusted ACC bridge submits source-file-bound reports and never accepts a mismatched session log", async () => {
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { submitACC } = await import("../server/acc-bridge.js");
+  const dir = await mkdtemp(join(tmpdir(), "acc-bridge-"));
+  try {
+    const result = {
+      metaData: "session-acc",
+      trackName: "Spa",
+      sessionResult: {
+        leaderBoardLines: [
+          { car: { carId: 1, drivers: [{ playerId: "steam_123" }] } },
+          { car: { carId: 2, drivers: [{ playerId: "steam_456" }] } },
+        ],
+      },
+      laps: [
+        { carId: 1, lapTime: 60001, isValidForBest: true },
+        { carId: 2, lapTime: 62001, isValidForBest: true },
+      ],
+    };
+    await writeFile(join(dir, "result.json"), JSON.stringify(result));
+    await writeFile(
+      join(dir, "log.json"),
+      JSON.stringify({
+        external_session_id: "session-acc",
+        actual_start: "2026-10-06T16:00:00Z",
+      }),
+    );
+    const reports = [];
+    const context = {
+      game: "acc",
+      challenge_id: A,
+      event_id: E,
+      external_session_id: "session-acc",
+      track_name: "Spa",
+    };
+    const post = async (path, body) => {
+      if (path.endsWith("/contracts")) return [context];
+      reports.push(body);
+      return { status: "Settled" };
+    };
+    assert.deepEqual(
+      await submitACC(
+        join(dir, "result.json"),
+        join(dir, "log.json"),
+        {},
+        post,
+      ),
+      { submitted: 1 },
+    );
+    assert.equal(reports[0].drivers[0].laps[0].lap_time_seconds, "60.001000");
+    await submitACC(join(dir, "result.json"), join(dir, "log.json"), {}, post);
+    assert.deepEqual(reports[0], reports[1]);
+    await writeFile(
+      join(dir, "log.json"),
+      JSON.stringify({
+        external_session_id: "different",
+        actual_start: "2026-10-06T16:00:00Z",
+      }),
+    );
+    await assert.rejects(
+      submitACC(join(dir, "result.json"), join(dir, "log.json"), {}, post),
+      /session_log_binding/,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

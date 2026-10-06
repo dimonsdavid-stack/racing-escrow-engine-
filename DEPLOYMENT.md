@@ -63,3 +63,7 @@ For rollback, restore a prior known-good web deployment while preserving the cur
 ## Current activation boundary
 
 The web release can be published without secrets. This session does not possess working racing Supabase project credentials, an authorized live iRacing client/operator account, approved merchant credentials, an activated ACC source host, Discord bot credentials, or a persistent worker deployment. These are explicit remaining activation dependencies, not simulated production integrations. Supabase connector discovery currently returns an authorization error; reconnect the intended account before project selection or provisioning.
+
+### ACC host bridge execution
+
+`node server/acc-bridge.js /path/to/final-result.json /path/to/session-log.json` runs on the trusted host after the dedicated server has finalized the results file. The session log must contain `external_session_id` matching the result file's `metaData`, and `actual_start` as an ISO UTC timestamp captured from the real server's session start. Configure the host's `ACC_PROVIDER_KEY_ID`, `ACC_PROVIDER_SECRET_BASE64`, and HTTPS backend origin; do not give the game host a database service key. The bridge fetches provider-bound active contracts, normalizes each driver's evidence, signs exact bytes, and retries the same source receipt. Re-running the same immutable result/log files is safe. Malformed or ambiguous files remain unconfirmed.

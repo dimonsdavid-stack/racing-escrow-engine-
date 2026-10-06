@@ -52,6 +52,22 @@ export function createProviderRouter({
       },
     );
   }
+  route(
+    "/api/v1/providers/contracts",
+    z
+      .object({
+        external_session_id: z.string().min(1).max(100),
+        after: z.uuid().nullable().optional(),
+      })
+      .strict(),
+    (i, d) =>
+      callRpc(client, "sim_provider_contracts", {
+        p_tenant_id: i.tenantId,
+        p_provider_id: i.providerId,
+        p_external_session_id: d.external_session_id,
+        p_after: d.after ?? null,
+      }),
+  );
   route("/api/v1/providers/events", EventRegistration, async (i, d) =>
     callRpc(client, "sim_register_event", {
       p_tenant_id: i.tenantId,

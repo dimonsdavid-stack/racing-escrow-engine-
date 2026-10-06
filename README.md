@@ -18,6 +18,7 @@ A mobile web P2P challenge and validation layer for **external iRacing and ACC s
 | `src/providers.js`, `src/provider-routes.js` | External simulator result adapters and signed provider ingress |
 | `src/oauth.js` | iRacing OAuth PKCE, Steam OpenID, AES-GCM token encryption and one-use refresh leases |
 | `src/commerce.js` | Hosted checkout and raw-signature Stripe webhook fulfillment |
+| `server/acc-bridge.js` | Trusted dedicated-server result/log submission, pagination and stable retries |
 | `src/worker.js` | Durable provider-result processing and deadline refunds |
 | `frontend/app/page.js`, `frontend/app/globals.css` | Next.js responsive customer dashboard |
 | `discord/bot.js` | Slash command broker and actual invited-opponent acceptance |

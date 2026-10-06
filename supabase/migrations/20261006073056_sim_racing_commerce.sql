@@ -200,6 +200,9 @@ BEGIN
 CREATE FUNCTION public.sim_result_context(p_tenant_id uuid,p_challenge_id uuid) RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog AS $$
  SELECT jsonb_build_object('tenant_id',c.tenant_id,'challenge_id',c.id,'session_id',c.session_id,'challenger_id',c.challenger_id,'opponent_id',c.opponent_id,'provider_id',c.provider_id,'status',c.status,'deadline',c.telemetry_deadline,'event_id',e.id,'external_session_id',e.external_session_id,'track_name',e.track_name,'starts_at',e.starts_at,'funded_at',s.funded_at,'game',s.game,'rule',s.rule,'selection_a',s.selection_a,'selection_b',s.selection_b) FROM race_private.sim_contracts s JOIN race_private.challenges c ON c.tenant_id=s.tenant_id AND c.id=s.challenge_id JOIN race_private.sim_events e ON e.tenant_id=s.tenant_id AND e.id=s.event_id WHERE s.tenant_id=p_tenant_id AND s.challenge_id=p_challenge_id
 $$;
+CREATE FUNCTION public.sim_provider_contracts(p_tenant_id uuid,p_provider_id uuid,p_external_session_id text,p_after uuid DEFAULT NULL) RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog AS $$
+ SELECT coalesce(jsonb_agg(race_private_context),'[]'::jsonb) FROM(SELECT public.sim_result_context(c.tenant_id,c.id) AS race_private_context FROM race_private.challenges c JOIN race_private.sim_contracts s ON s.tenant_id=c.tenant_id AND s.challenge_id=c.id JOIN race_private.sim_events e ON e.tenant_id=s.tenant_id AND e.id=s.event_id WHERE c.tenant_id=p_tenant_id AND c.provider_id=p_provider_id AND e.external_session_id=p_external_session_id AND c.status='Active' AND(p_after IS NULL OR c.id>p_after) ORDER BY c.id LIMIT 100) pending
+$$;
 CREATE FUNCTION public.sim_commit_result(p_tenant_id uuid,p_provider_id uuid,p_challenge_id uuid,p_source_id text,p_external_session_id text,p_track_name text,p_actual_start timestamptz,p_payload_sha256 text,p_resolution text,p_best_a numeric,p_best_b numeric,p_summary jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog SET lock_timeout='3s' AS $$
 DECLARE c race_private.challenges%ROWTYPE;s race_private.sim_contracts%ROWTYPE;e race_private.sim_events%ROWTYPE;win uuid;resolution text;r jsonb;v race_private.provider_evidence%ROWTYPE;
@@ -207,7 +210,7 @@ BEGIN SELECT * INTO c FROM race_private.challenges WHERE tenant_id=p_tenant_id A
  SELECT * INTO s FROM race_private.sim_contracts WHERE tenant_id=p_tenant_id AND challenge_id=p_challenge_id;
  SELECT * INTO e FROM race_private.sim_events WHERE tenant_id=p_tenant_id AND id=s.event_id;
  IF c.id IS NULL OR s.challenge_id IS NULL OR (c.provider_id,e.external_session_id,e.track_name) IS DISTINCT FROM(p_provider_id,p_external_session_id,p_track_name) THEN RAISE EXCEPTION 'source_binding_mismatch' USING ERRCODE='PT403'; END IF;
- IF p_actual_start IS NULL OR p_actual_start<=s.funded_at OR abs(extract(epoch FROM(p_actual_start-e.starts_at)))>300 THEN RAISE EXCEPTION 'historical_or_wrong_session' USING ERRCODE='PT403'; END IF;
+ IF p_actual_start IS NULL OR p_actual_start<=s.funded_at OR p_actual_start>clock_timestamp() OR abs(extract(epoch FROM(p_actual_start-e.starts_at)))>300 THEN RAISE EXCEPTION 'historical_or_wrong_session' USING ERRCODE='PT403'; END IF;
  IF NOT EXISTS(SELECT 1 FROM race_private.providers WHERE tenant_id=p_tenant_id AND id=p_provider_id AND enabled) THEN RAISE EXCEPTION 'provider_unavailable' USING ERRCODE='PT403'; END IF;
  SELECT * INTO v FROM race_private.provider_evidence WHERE tenant_id=p_tenant_id AND challenge_id=p_challenge_id;
  IF FOUND THEN IF (v.source_id,v.sha256) IS DISTINCT FROM(p_source_id,p_payload_sha256) THEN RAISE EXCEPTION 'evidence_conflict' USING ERRCODE='PT409'; END IF;
