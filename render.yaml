@@ -1,0 +1,86 @@
+# Persistent workers only. The web/API remains on the existing Vercel project.
+# Creating these services requires the owner's confirmed Render compute quote.
+# Secrets are supplied in Render; they never belong in the repository.
+services:
+  - type: worker
+    name: racing-escrow-telemetry
+    runtime: node
+    plan: 0.5c-512mb
+    region: oregon
+    repo: https://github.com/dimonsdavid-stack/racing-escrow-engine-
+    branch: main
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    buildCommand: npm ci --omit=dev --ignore-scripts
+    startCommand: node src/worker.js
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        value: https://eoevqltkuptycolfptca.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: IRACING_CLIENT_ID
+        sync: false
+      - key: IRACING_CLIENT_SECRET
+        sync: false
+      - key: IRACING_OPERATOR_AUTH_USER_ID
+        sync: false
+      - key: IRACING_DOWNLOAD_HOSTS
+        sync: false
+      - key: OAUTH_ENCRYPTION_KEY
+        sync: false
+  - type: worker
+    name: racing-escrow-redemptions
+    runtime: node
+    plan: 0.5c-512mb
+    region: oregon
+    repo: https://github.com/dimonsdavid-stack/racing-escrow-engine-
+    branch: main
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    buildCommand: npm ci --omit=dev --ignore-scripts
+    startCommand: node src/redemption-worker.js
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        value: https://eoevqltkuptycolfptca.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: COMMERCE_APPROVED
+        value: "true"
+  - type: worker
+    name: racing-escrow-discord
+    runtime: node
+    plan: 0.5c-512mb
+    region: oregon
+    repo: https://github.com/dimonsdavid-stack/racing-escrow-engine-
+    branch: main
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    buildCommand: npm ci --omit=dev --ignore-scripts
+    startCommand: node discord/bot.js
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: APP_ORIGIN
+        value: https://racing-escrow-engine.vercel.app
+      - key: BACKEND_API_BASE_URL
+        value: https://racing-escrow-engine.vercel.app
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_BROKER_KEY_ID
+        sync: false
+      - key: DISCORD_BROKER_SECRET_BASE64
+        sync: false
