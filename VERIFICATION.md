@@ -1,3 +1,5 @@
+> Historical verification. The current external-simulator platform record is [VERIFICATION-3.0.md](VERIFICATION-3.0.md).
+
 # Verification record — customer application 2.0.0
 
 Canonical app: https://racing-escrow-engine.vercel.app/

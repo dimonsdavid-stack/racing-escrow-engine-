@@ -1,3 +1,5 @@
+> Historical verification. The current external-simulator platform record is [VERIFICATION-3.0.md](VERIFICATION-3.0.md).
+
 # Verification record — 1.1.0 — 2026-10-05
 
 Production URL: https://racing-escrow-engine.vercel.app/

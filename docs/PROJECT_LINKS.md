@@ -15,6 +15,7 @@
 | Repository | https://github.com/dimonsdavid-stack/racing-escrow-engine- |
 | Verification workflow | https://github.com/dimonsdavid-stack/racing-escrow-engine-/actions/workflows/verify.yml |
 | Full fresh-install SQL | https://github.com/dimonsdavid-stack/racing-escrow-engine-/blob/main/supabase/schema.sql |
+| Release verification | https://github.com/dimonsdavid-stack/racing-escrow-engine-/blob/main/VERIFICATION-3.0.md |
 | Architecture | https://github.com/dimonsdavid-stack/racing-escrow-engine-/blob/main/docs/ARCHITECTURE.md |
 | API contracts | https://github.com/dimonsdavid-stack/racing-escrow-engine-/blob/main/docs/API.md |
 | Deployment instructions | https://github.com/dimonsdavid-stack/racing-escrow-engine-/blob/main/DEPLOYMENT.md |
