@@ -308,6 +308,24 @@ test("institutional controls enforce free entry, evidence, isolation and journal
       },
     );
     await t.test(
+      "a denied risk assertion blocks both GC and SC until recorded review",
+      async () => {
+        await receipt(db, C, "risk", {
+          decision: "denied",
+          reason: "vendor_fraud_denial",
+        });
+        await actor(db, C);
+        await assert.rejects(
+          rpc(db, "race_daily", [T]),
+          /play_or_currency_unavailable/,
+        );
+        assert.equal(
+          (await rpc(db, "grid_compliance", [T])).reason,
+          "account_review",
+        );
+      },
+    );
+    await t.test(
       "journal chains are verifiable, immutable, sealed against additional lines and isolate tenants",
       async () => {
         await service(db);

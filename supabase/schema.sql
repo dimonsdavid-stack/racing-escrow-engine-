@@ -1349,7 +1349,7 @@ BEGIN
  IF current_observed IS NULL OR observed>current_observed THEN
   INSERT INTO race_private.compliance_current VALUES(t,u,purpose,receipt) ON CONFLICT ON CONSTRAINT compliance_current_pkey DO UPDATE SET receipt_id=excluded.receipt_id;
  END IF;
- IF effective='review' THEN INSERT INTO race_private.risk_cases VALUES(t,gen_random_uuid(),u,receipt,effective_reason,now());END IF;
+ IF effective='review' OR(purpose='risk' AND effective='denied') THEN INSERT INTO race_private.risk_cases VALUES(t,gen_random_uuid(),u,receipt,effective_reason,now());END IF;
  RETURN jsonb_build_object('receipt_id',receipt,'decision',effective,'duplicate',false,'current',current_observed IS NULL OR observed>current_observed);
 END $$;
 CREATE FUNCTION race_private.grid_resolve_review(t uuid,provider uuid,case_ref uuid,reason text,sha text) RETURNS jsonb
@@ -1583,7 +1583,7 @@ EXCEPTION WHEN invalid_text_representation OR SQLSTATE 'PT403' THEN RETURN false
 END $$;
 CREATE FUNCTION race_private.grid_wallet_invalidate() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
- IF to_regprocedure('realtime.send(jsonb,text,text,boolean)') IS NOT NULL THEN
+ IF NEW.auth_user_id IS NOT NULL AND to_regprocedure('realtime.send(jsonb,text,text,boolean)') IS NOT NULL THEN
   PERFORM realtime.send(jsonb_build_object('refresh',true),'wallet_changed','gridstake-wallet:'||NEW.tenant_id::text||':'||NEW.auth_user_id::text,true);
  END IF;
  RETURN NULL;

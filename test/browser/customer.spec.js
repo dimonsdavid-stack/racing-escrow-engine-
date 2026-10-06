@@ -344,6 +344,7 @@ test("free entry records consent, retries the same receipt and displays only con
   await page.route("**/api/v1/app/compliance", (r) =>
     r.fulfill({
       json: {
+        program,
         eligible: consent,
         consent_recorded: consent,
         reason: consent ? "eligible" : "rules_consent_required",

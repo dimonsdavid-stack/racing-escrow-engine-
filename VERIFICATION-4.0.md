@@ -7,7 +7,7 @@ The release adds source-bound transactional settlement, formal promotion version
 ## Completed local checks
 
 - `npm run build`: production Next.js static export and generated full SQL compile successfully.
-- `npm test`: 59 HTTP, provider, failure and database scenarios pass, zero skipped or failed.
+- `npm test`: 60 HTTP, provider, failure and database scenarios pass, zero skipped or failed.
 - New full-schema tests exercise expired location, duplicate person identities, exact-once free credit, quota enforcement, immutable catalog/receipts, source-bound payout comparison, full zero-rake dirty-race refunds, sealed journal tampering and deferred-audit rollback.
 - Private wallet policies are tested with unrelated broad permissive receive/publish policies present; foreign wallet reads and client publishing remain blocked.
 - `git diff --check`: clean.

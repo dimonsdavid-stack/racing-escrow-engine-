@@ -890,7 +890,9 @@ test("native PostgreSQL concurrent escrow mutations", async (t) => {
                 "(" +
                 args.map((_, i) => "$" + (i + 1)).join(",") +
                 ") AS r",
-              args,
+              args.map((value) =>
+                Array.isArray(value) ? JSON.stringify(value) : value,
+              ),
             )
           ).rows[0].r;
         await admin.query(
