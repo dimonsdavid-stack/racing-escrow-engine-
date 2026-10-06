@@ -7,7 +7,7 @@ Won-SC classification and historical audit-based backfill; atomic withdrawal res
 ## Local evidence
 
 - Full fresh-install SQL compiles, including the four versioned migrations.
-- 76 HTTP, provider-transport and SQL checks pass with no failures or skips.
+- 77 HTTP, provider-transport and SQL checks pass with no failures or skips.
 - Production Next.js static export builds successfully.
 - Production dependency audit reports zero known vulnerabilities after exact dependency overrides.
 - Actual installed PM2 7.0.4 parses `ecosystem.config.cjs`: four processes, two clustered HTTP instances, ready signaling and graceful drain configuration.

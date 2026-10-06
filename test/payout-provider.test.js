@@ -340,3 +340,77 @@ test("cash endpoint rejects body-supplied owners and raw bank credentials", asyn
     await new Promise((r) => server.close(r));
   }
 });
+
+test("withdrawal bank readiness requires verified ownership and legal-name agreement with current KYC", async () => {
+  const context = {
+    user_id: A,
+    intent_id: "33333333-3333-4333-8333-333333333333",
+    started_at: new Date().toISOString(),
+    account_id: "acct_bound",
+  };
+  const bindings = [];
+  const customer = {
+    rpc() {
+      return {
+        abortSignal: async () => ({ data: context, error: null, status: 200 }),
+      };
+    },
+  };
+  const admin = {
+    rpc(name, args) {
+      bindings.push(args);
+      return {
+        abortSignal: async () => ({
+          data: { bound: true },
+          error: null,
+          status: 200,
+        }),
+      };
+    },
+  };
+  const account = {
+    id: "acct_bound",
+    type: "express",
+    business_type: "individual",
+    country: "US",
+    metadata: { tenant_id: T, user_id: A, intent_id: context.intent_id },
+    individual: { first_name: "Alice", last_name: "Racing" },
+    payouts_enabled: true,
+    capabilities: { transfers: "active" },
+    settings: { payouts: { schedule: { interval: "manual" } } },
+  };
+  let bank = {
+    id: "ba_bound",
+    currency: "usd",
+    default_for_currency: true,
+    status: "verified",
+    account_holder_name: "Alice Racing",
+  };
+  const stripe = {
+    accounts: {
+      retrieve: async () => account,
+      listExternalAccounts: async () => ({ data: [bank] }),
+    },
+  };
+  const options = {
+    onboard: false,
+    identity: { first_name: "Alice", last_name: "Racing" },
+  };
+  assert.equal(
+    (await connectBank(customer, admin, T, env, stripe, options)).ready,
+    true,
+  );
+  bank = { ...bank, account_holder_name: "Different Person" };
+  assert.equal(
+    (await connectBank(customer, admin, T, env, stripe, options)).ready,
+    false,
+  );
+  bank = { ...bank, account_holder_name: "Alice Racing", status: "new" };
+  assert.equal(
+    (await connectBank(customer, admin, T, env, stripe, options)).ready,
+    false,
+  );
+  assert.equal(bindings[0].p_ready, true);
+  assert.equal(bindings[1].p_ready, false);
+  assert.equal(bindings[2].p_ready, false);
+});

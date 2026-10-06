@@ -34,7 +34,7 @@ export async function connectBank(
   tenant,
   env = process.env,
   stripe = payoutClient(env),
-  { onboard = true } = {},
+  { onboard = true, identity = null } = {},
 ) {
   const context = await callRpc(customer, "cash_begin_account", {
     p_tenant_id: tenant,
@@ -48,6 +48,7 @@ export async function connectBank(
     a = await stripe.accounts.create(
       {
         type: "express",
+        business_type: "individual",
         country: "US",
         capabilities: { transfers: { requested: true } },
         settings: { payouts: { schedule: { interval: "manual" } } },
@@ -69,9 +70,32 @@ export async function connectBank(
     (b) =>
       b.currency === "usd" &&
       b.default_for_currency === true &&
-      !["errored", "verification_failed"].includes(b.status),
+      b.status === "verified",
+  );
+  const normalize = (value) =>
+    typeof value === "string"
+      ? value
+          .normalize("NFKD")
+          .replace(/\p{M}/gu, "")
+          .toLowerCase()
+          .replace(/[^\p{L}\p{N}]/gu, "")
+      : "";
+  const verifiedName = normalize(
+    (identity?.first_name ?? "") + " " + (identity?.last_name ?? ""),
+  );
+  const accountName = normalize(
+    (a.individual?.first_name ?? "") + " " + (a.individual?.last_name ?? ""),
+  );
+  const nameMatches = Boolean(
+    identity?.first_name &&
+    identity?.last_name &&
+    verifiedName &&
+    verifiedName === accountName &&
+    verifiedName === normalize(bank?.account_holder_name),
   );
   const ready = Boolean(
+    a.business_type === "individual" &&
+    nameMatches &&
     a.payouts_enabled &&
     a.capabilities?.transfers === "active" &&
     !a.requirements?.disabled_reason &&

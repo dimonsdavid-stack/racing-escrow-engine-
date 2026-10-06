@@ -340,7 +340,7 @@ test("cash redemption ledger preserves provenance, isolates ownership and reconc
       "provider-confirmed payout and late bank return post exactly one compensating credit",
       async () => {
         await service(db);
-        const j = await rpc(db, "cash_lease", []);
+        let j = await rpc(db, "cash_lease", []);
         assert.equal(j.id, id);
         const record = (phase, obj) =>
           rpc(db, "cash_record", [
@@ -357,6 +357,36 @@ test("cash redemption ledger preserves provenance, isolates ownership and reconc
           /invalid_transition/,
         );
         await rpc(db, "cash_start_phase", [T, id, j.lease_token, "transfer"]);
+        const originalStart = (
+          await rpc(db, "cash_start_phase", [T, id, j.lease_token, "transfer"])
+        ).transfer_started_at;
+        await record("review", "unknown_test_transfer");
+        await rpc(db, "cash_release", [T, id, j.lease_token]);
+        const reviewReceipt = randomUUID();
+        await rpc(db, "cash_wake_review", [
+          T,
+          P,
+          id,
+          reviewReceipt,
+          "Provider recovery evidence checked",
+          "a".repeat(64),
+        ]);
+        assert.equal(
+          (
+            await rpc(db, "cash_wake_review", [
+              T,
+              P,
+              id,
+              reviewReceipt,
+              "Provider recovery evidence checked",
+              "a".repeat(64),
+            ])
+          ).duplicate,
+          true,
+        );
+        j = await rpc(db, "cash_lease", []);
+        assert.equal(j.transfer_started_at, originalStart);
+
         await record("transfer", "tr_testTransfer");
         await rpc(db, "cash_start_phase", [T, id, j.lease_token, "payout"]);
         await record("payout", "po_testPayout");

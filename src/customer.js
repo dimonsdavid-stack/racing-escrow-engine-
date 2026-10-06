@@ -332,7 +332,7 @@ export function createCustomerRouter({
           return res
             .status(403)
             .json({ error: "identity_verification_required" });
-        await refreshKyc(
+        const verification = await refreshKyc(
           admin,
           env,
           config.tenant,
@@ -346,20 +346,18 @@ export function createCustomerRouter({
           config.tenant,
           env,
           stripe,
-          { onboard: false },
+          { onboard: false, identity: verification.identity },
         );
         if (!bank.ready)
           return res.status(403).json({ error: "bank_verification_required" });
       }
-      return res
-        .status(202)
-        .json(
-          await callRpc(req.customer, "execute_atomic_withdrawal_debit", {
-            p_tenant_id: config.tenant,
-            p_request_id: body.data.request_id,
-            p_amount_sc: body.data.amount_sc,
-          }),
-        );
+      return res.status(202).json(
+        await callRpc(req.customer, "execute_atomic_withdrawal_debit", {
+          p_tenant_id: config.tenant,
+          p_request_id: body.data.request_id,
+          p_amount_sc: body.data.amount_sc,
+        }),
+      );
     } catch (e) {
       return reject(res, e);
     }

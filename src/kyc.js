@@ -104,7 +104,18 @@ export class SumsubClient {
     const sha = createHash("sha256")
       .update(JSON.stringify(snapshot))
       .digest("hex");
-    return { status, observed, sha };
+    return {
+      status,
+      observed,
+      sha,
+      identity:
+        status === "Verified"
+          ? {
+              first_name: a.info?.latinFirstName ?? a.info?.firstName,
+              last_name: a.info?.latinLastName ?? a.info?.lastName,
+            }
+          : null,
+    };
   }
 }
 export async function refreshKyc(

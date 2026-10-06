@@ -279,7 +279,7 @@ test("free entry is visible from the shop and does not accept requests before pr
 }, info) => {
   await page.goto("/#wallet");
   await page
-    .getByRole("link", { name: /View official rules & free entry/ })
+    .getByRole("link", { name: /View program rules & free entry/ })
     .click();
   await expect(
     page.getByRole("heading", { name: "No purchase necessary." }),

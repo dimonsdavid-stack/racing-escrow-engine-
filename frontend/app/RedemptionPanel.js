@@ -14,9 +14,16 @@ export default function RedemptionPanel({
     [busy, setBusy] = useState(false),
     [submitted, setSubmitted] = useState(null);
   const pending = useRef(null),
-    mounted = useRef(true);
+    mounted = useRef(true),
+    scope = useRef(requestScope);
   const storageKey = "gridstake-redemption:" + requestScope;
   useEffect(() => {
+    scope.current = requestScope;
+    pending.current = null;
+    setState(null);
+    setSubmitted(null);
+    setError("");
+    setBusy(false);
     if (!requestScope) return;
     try {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null");
@@ -43,23 +50,24 @@ export default function RedemptionPanel({
   async function load() {
     if (!signedIn) return;
     const s = await api("redemptions");
-    if (mounted.current) setState(s);
+    if (mounted.current && scope.current === requestScope) setState(s);
   }
   useEffect(() => {
     if (signedIn)
       load().catch(() => {
-        if (mounted.current)
+        if (mounted.current && scope.current === requestScope)
           setError(
             "We could not load your redemption history. Try refreshing.",
           );
       });
-  }, [signedIn, api]);
+  }, [signedIn, api, requestScope]);
   async function action(fn) {
     setError("");
     setBusy(true);
     try {
       await fn();
     } catch (e) {
+      if (!mounted.current || scope.current !== requestScope) return;
       setError(
         e.status === 503
           ? "The provider could not confirm this request. Retry with the same amount; your request ID is retained."
@@ -70,11 +78,12 @@ export default function RedemptionPanel({
               : "The request could not be accepted. Check your account and amount.",
       );
     } finally {
-      if (mounted.current) setBusy(false);
+      if (mounted.current && scope.current === requestScope) setBusy(false);
     }
   }
   async function redirect(path) {
     const { url } = await api(path, {});
+    if (!mounted.current || scope.current !== requestScope) return;
     const u = new URL(url);
     const valid =
       path === "kyc/start"
@@ -93,7 +102,7 @@ export default function RedemptionPanel({
     pending.current ??= { request_id: crypto.randomUUID(), amount_sc: amount };
     sessionStorage.setItem(storageKey, JSON.stringify(pending.current));
     const result = await api("redeem", pending.current);
-    if (mounted.current) {
+    if (mounted.current && scope.current === requestScope) {
       setSubmitted(result);
       pending.current = null;
       sessionStorage.removeItem(storageKey);

@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import pg from "pg";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import {
   seed,
   create,
@@ -1137,7 +1137,9 @@ test("native PostgreSQL concurrent escrow mutations", async (t) => {
               randomUUID(),
               actorId,
               purpose,
-              purpose === "identity" ? "f".repeat(64) : null,
+              purpose === "identity"
+                ? createHash("sha256").update(actorId).digest("hex")
+                : null,
               purpose === "identity" ? 21 : null,
               purpose === "location" ? "US-CA" : null,
               "b".repeat(64),
