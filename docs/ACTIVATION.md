@@ -1,7 +1,8 @@
 # Activation record
 
 - Web project: `racing-escrow-engine`, Vercel team `720studios`, Node 24 / Express + static Next.js.
-- Production database: not configured in this session. Supabase connector project discovery returned an authorization error on 2026-10-06.
+- Production database: not configured. Rechecked on 2026-10-06: Supabase discovery is now authorized, but the available projects are four unrelated inactive projects; no dedicated racing database has been selected or initialized. Provisioning requires an explicit organization selection and Supabase cost confirmation.
+- Production environment: rechecked on 2026-10-06; the Vercel project has no configured environment variables. Publishing or redeploying the web application does not activate authentication, simulator access, payments, or background workers.
 - User sign-in: activation awaits dedicated Supabase credentials, verified auth provider configuration and deployed schema.
 - iRacing: official OAuth integration implemented; real authenticated Data API schemas and commercial access not validated without operator credentials.
 - ACC: normalization and signed provider report route implemented; no trusted dedicated server has been connected in this session.
@@ -12,3 +13,5 @@
 - Database CLI: automatic approval review blocked a Supabase CLI attempt after third-party PostHog telemetry. Local migration files and database tests were completed without retrying that CLI.
 
 This record distinguishes deployed source and tested behavior from external service activation. Do not mark an item complete merely because its configuration variable is present.
+
+The current operator action is to select a dedicated Supabase organization/project, then supply the actual provider and hosting configuration described in `DEPLOYMENT.md`. No unrelated inactive database was modified during finalization.
